@@ -5,9 +5,9 @@ module.exports = {
   owner: 'nippysky',
   version: '1.0.0',
   orientation: 'portrait',
-  // EAS Update — run `npx eas init` + `npx eas update:configure` once, then
-  // paste the generated project ID below and in extra.eas.projectId.
-  // updates: { url: 'https://u.expo.dev/<UGWO_EAS_PROJECT_ID>' },
+  updates: {
+    url: 'https://u.expo.dev/01aa1bb2-2d7d-4f4c-ba19-9450739e0b3a',
+  },
   runtimeVersion: {
     policy: 'appVersion',
   },
@@ -94,7 +94,7 @@ module.exports = {
   // Get yours: npx eas project:info  (then paste the ID below)
   extra: {
     eas: {
-      // projectId: '<UGWO_EAS_PROJECT_ID>',
+      projectId: '01aa1bb2-2d7d-4f4c-ba19-9450739e0b3a',
     },
   },
 };

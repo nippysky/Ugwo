@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ụgwọ — Owed. Remembered. Settled. A private IOU tracker by NIPPYSKY</title>
+<meta name="description" content="Ụgwọ is a private IOU and personal debt tracker. Log who owes you and who you owe in seconds, send face-saving reminders, and settle with dignity — all end-to-end encrypted. We can't see your debts. Nobody can.">
+<meta name="theme-color" content="#1E2A4A">
+<link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/img/icon-192.png">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<style>
+/* ── Landing-specific ── */
+.hero {
+  background: linear-gradient(168deg, var(--indigo) 0%, var(--indigo-deep) 100%);
+  color: var(--paper);
+  padding: clamp(48px, 9vw, 110px) clamp(20px, 5vw, 56px) 0;
+  overflow: hidden;
+  position: relative;
+}
+.hero-inner {
+  max-width: 1120px; margin: 0 auto;
+  display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center;
+}
+.hero .kicker {
+  color: var(--amber); font-size: 12.5px; letter-spacing: 3px;
+  text-transform: uppercase; font-weight: 600;
+}
+.hero h1 {
+  font-family: var(--serif); font-weight: 300;
+  font-size: clamp(36px, 6.5vw, 68px); line-height: 1.08;
+  letter-spacing: -1.5px; margin: 16px 0 20px;
+}
+.hero h1 em { font-style: italic; color: var(--amber-light); }
+.hero .sub {
+  font-size: clamp(16px, 2vw, 18px); color: rgba(250,249,247,0.75);
+  max-width: 46ch; margin-bottom: 34px;
+}
+.hero .store-row { margin-bottom: 52px; }
+.hero-trust { display: flex; gap: 26px; flex-wrap: wrap; padding-bottom: 48px; }
+.hero-trust div { font-size: 13px; color: rgba(250,249,247,0.6); }
+.hero-trust strong { display: block; color: var(--amber-light); font-size: 15px; }
+
+/* ── Phone mockups ── */
+.phones { position: relative; height: 560px; }
+.phone {
+  position: absolute; width: 252px; border-radius: 38px;
+  background: #0B0D14; padding: 10px;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.45);
+}
+.phone .screen {
+  border-radius: 30px; overflow: hidden; background: var(--paper);
+  height: 500px; display: flex; flex-direction: column;
+  font-size: 11px;
+}
+.phone.back  { right: 150px; top: 40px; transform: rotate(-7deg); opacity: 0.9; }
+.phone.front { right: 0; top: 0; transform: rotate(4deg); z-index: 2; }
+
+/* mock UI bits */
+.m-head { padding: 18px 16px 10px; }
+.m-hello { font-size: 10px; color: #888; }
+.m-name  { font-family: var(--serif); font-size: 17px; color: var(--ink); }
+.m-balance-card {
+  margin: 8px 12px; padding: 14px; border-radius: 16px;
+  background: var(--indigo); color: var(--paper);
+}
+.m-balance-label { font-size: 8.5px; letter-spacing: 1.5px; color: var(--amber-light); }
+.m-balance { font-family: var(--serif); font-size: 24px; font-weight: 300; margin-top: 2px; color: var(--amber); }
+.m-balance-row { display: flex; gap: 14px; margin-top: 10px; font-size: 9px; color: rgba(250,249,247,0.7); }
+.m-balance-row b { display: block; font-size: 11px; color: var(--paper); }
+.m-balance-row b.amber { color: var(--amber); }
+.m-balance-row b.red { color: #F0A196; }
+.m-section { padding: 10px 14px 4px; font-size: 8.5px; letter-spacing: 1.4px; color: #999; }
+.m-row {
+  display: flex; align-items: center; gap: 9px;
+  background: #fff; margin: 0 12px 7px; padding: 9px 10px;
+  border-radius: 12px; border: 1px solid var(--border);
+}
+.m-ava { width: 26px; height: 26px; border-radius: 13px; flex-shrink: 0;
+         display: flex; align-items: center; justify-content: center;
+         font-size: 10px; font-weight: 700; color: #fff; background: var(--indigo); }
+.m-row .t { flex: 1; }
+.m-row .t b { display: block; font-size: 10.5px; color: var(--ink); font-weight: 600; }
+.m-row .t span { font-size: 8.5px; }
+.m-row .t span.due { color: #C47F00; }
+.m-row .t span.over { color: #B5483B; }
+.m-row .t span.ok { color: #999; }
+.m-amt { font-weight: 700; font-size: 10.5px; }
+.m-amt.owed { color: #C58527; }
+.m-amt.iowe { color: #B5483B; }
+.m-tabbar {
+  margin-top: auto; display: flex; align-items: center; justify-content: space-around;
+  background: #fff; border-top: 1px solid var(--border); padding: 7px 6px 10px;
+}
+.m-tab { font-size: 7.5px; color: #A9ABB2; text-align: center; }
+.m-tab .dot { width: 16px; height: 16px; border-radius: 6px; background: #E6E7EB; margin: 0 auto 3px; }
+.m-fab {
+  width: 40px; height: 40px; border-radius: 20px; background: var(--indigo);
+  margin-top: -22px; border: 2.5px solid #fff;
+  box-shadow: 0 6px 14px rgba(30,42,74,0.4);
+  display: flex; align-items: center; justify-content: center; color: var(--amber-light); font-size: 18px;
+}
+/* person ledger (back phone) */
+.m-person-hero { background: var(--indigo); color: var(--paper); padding: 18px 14px; text-align: center; }
+.m-person-ava { width: 34px; height: 34px; border-radius: 17px; background: var(--amber);
+                color: var(--indigo); font-weight: 700; font-size: 13px;
+                display: flex; align-items: center; justify-content: center; margin: 0 auto; }
+.m-person-name { font-family: var(--serif); font-size: 15px; margin-top: 6px; }
+.m-person-owes { font-size: 8px; letter-spacing: 1.5px; color: rgba(250,249,247,0.55); margin-top: 6px; }
+.m-person-amt { font-family: var(--serif); font-size: 20px; color: var(--amber); margin-top: 1px; }
+.m-actions { display: flex; gap: 7px; margin-top: 12px; }
+.m-act { flex: 1; padding: 7px 4px; border-radius: 100px; font-size: 8.5px; font-weight: 700; }
+.m-act.solid { background: var(--amber); color: var(--indigo); }
+.m-act.ghost { border: 1px solid rgba(250,249,247,0.35); color: var(--paper); }
+
+/* ── Feature sections ── */
+.features { max-width: 1120px; margin: 0 auto; padding: clamp(64px, 9vw, 120px) clamp(20px, 5vw, 56px); }
+.features .kicker { color: var(--indigo-mut); font-size: 12.5px; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; }
+.features h2 {
+  font-family: var(--serif); font-weight: 300;
+  font-size: clamp(30px, 4.5vw, 44px); letter-spacing: -1px;
+  margin: 12px 0 14px; color: var(--indigo);
+}
+.features .lead { color: var(--ink-soft); max-width: 60ch; margin-bottom: 48px; font-size: 17px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+.feat {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 28px;
+  transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease;
+}
+.feat:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(30,42,74,0.08);
+  border-color: rgba(30,42,74,0.14);
+}
+.feat .fi {
+  width: 46px; height: 46px; border-radius: 14px;
+  background: rgba(30,42,74,0.08); display: flex; align-items: center; justify-content: center;
+  font-size: 21px; margin-bottom: 16px;
+}
+.feat h3 { font-size: 17px; margin-bottom: 7px; color: var(--indigo); }
+.feat p { font-size: 14.5px; color: var(--ink-soft); }
+
+/* ── Security band ── */
+.security {
+  background: var(--indigo); color: var(--paper);
+  padding: clamp(64px, 8vw, 100px) clamp(20px, 5vw, 56px);
+}
+.security .inner { max-width: 1120px; margin: 0 auto; text-align: center; }
+.security h2 {
+  font-family: var(--serif); font-weight: 300;
+  font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.5px; margin-bottom: 12px;
+}
+.security .lead { color: rgba(250,249,247,0.7); max-width: 62ch; margin: 0 auto 44px; }
+.sec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; text-align: left; }
+.sec-item {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 18px; padding: 24px;
+  transition: background .25s ease, transform .25s ease;
+}
+.sec-item:hover { background: rgba(255,255,255,0.08); transform: translateY(-3px); }
+.sec-item h3 { color: var(--amber-light); font-size: 15.5px; margin-bottom: 6px; }
+.sec-item p { font-size: 13.5px; color: rgba(250,249,247,0.7); }
+
+/* ── Final CTA ── */
+.final { text-align: center; padding: clamp(64px, 9vw, 120px) 24px; }
+.final h2 {
+  font-family: var(--serif); font-weight: 300;
+  font-size: clamp(30px, 5vw, 48px); color: var(--indigo); letter-spacing: -1px; margin-bottom: 12px;
+}
+.final p { color: var(--ink-soft); margin-bottom: 32px; }
+.final .store-row { justify-content: center; }
+
+@media (max-width: 860px) {
+  .hero-inner { grid-template-columns: 1fr; }
+  .phones { height: 470px; margin-top: 12px; }
+  .phone { width: 220px; }
+  .phone .screen { height: 440px; }
+  .phone.back { right: auto; left: 8%; }
+  .phone.front { right: 8%; }
+}
+@media (max-width: 480px) {
+  .hero { padding-top: 36px; }
+  .hero h1 { font-size: clamp(32px, 9vw, 44px); letter-spacing: -1px; }
+  .hero .sub { max-width: none; }
+  .phones { height: 400px; }
+  .phone { width: 172px; }
+  .phone .screen { height: 350px; font-size: 10px; }
+  .hero-trust { gap: 20px 28px; padding-bottom: 40px; }
+  .store-btn { padding: 9px 16px 9px 12px; gap: 9px; }
+  .store-btn .store-txt strong { font-size: 15px; }
+  .features .lead, .security .lead { font-size: 15.5px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="/">
+    <img class="logo-mark" src="/img/icon-192.png" width="34" height="34" alt="">
+    <span class="logo-text">Ụgw<span class="accent">ọ</span></span>
+  </a>
+  <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="navMenu">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="links" id="navMenu">
+    <a href="#features">Features</a>
+    <a href="#security">Privacy</a>
+    <a href="/privacy">Policy</a>
+    <a class="cta" href="#download">Get the app</a>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="kicker reveal">Private IOU tracker · by NIPPYSKY</div>
+      <h1 class="reveal reveal-d1">Owed. Remembered. <em>Settled.</em></h1>
+      <p class="sub reveal reveal-d2">Ụgwọ keeps quiet track of who owes you and who you owe — friends, family, colleagues. Log a debt in seconds, send face-saving reminders, and settle with dignity. Keep track. Keep the peace.</p>
+
+      <div class="store-row reveal reveal-d3">
+        <div class="store-btn" role="img" aria-label="Coming soon on the App Store">
+          <svg class="store-ico" viewBox="0 0 384 512" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+          <span class="store-txt"><small>Download on the</small><strong>App Store</strong></span>
+          <span class="soon-tag">Soon</span>
+        </div>
+        <div class="store-btn" role="img" aria-label="Coming soon on Google Play">
+          <svg class="store-ico" viewBox="0 0 512 512" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1zM47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.6-256L47 0zm425.2 225.6l-58.9-34.1-65.7 64.5 65.7 64.5 60.1-34.1c18-14.3 18-46.5-1.2-60.8zM104.6 499l280.8-161.2-60.1-60.1L104.6 499z"/></svg>
+          <span class="store-txt"><small>GET IT ON</small><strong>Google Play</strong></span>
+          <span class="soon-tag">Soon</span>
+        </div>
+      </div>
+
+      <div class="hero-trust reveal reveal-d4">
+        <div><strong>E2E encrypted</strong>We can't see your debts. Nobody can.</div>
+        <div><strong>Relationship-first</strong>Polite reminders that save face</div>
+        <div><strong>No bank access</strong>You log it. You control it.</div>
+      </div>
+    </div>
+
+    <!-- CSS phone mockups -->
+    <div class="phones reveal reveal-d2" aria-hidden="true">
+      <div class="phone back">
+        <div class="screen">
+          <div class="m-person-hero">
+            <div class="m-person-ava">T</div>
+            <div class="m-person-name">Tobi Adeyemi</div>
+            <div class="m-person-owes">OWES YOU</div>
+            <div class="m-person-amt">₦70,000</div>
+            <div class="m-actions">
+              <div class="m-act solid">Record repayment</div>
+              <div class="m-act ghost">Send reminder</div>
+            </div>
+          </div>
+          <div class="m-section">TIMELINE</div>
+          <div class="m-row"><div class="m-ava" style="background:#EAF5EE;color:#1B7A4E">↩</div><div class="t"><b>Repayment</b><span class="ok">2 July · received</span></div><div class="m-amt" style="color:#1B7A4E">₦30,000</div></div>
+          <div class="m-row"><div class="m-ava" style="background:#FBF3E4;color:#C58527">₦</div><div class="t"><b>Loan — owed to you</b><span class="ok">14 June · due 30 July</span></div><div class="m-amt owed">₦100,000</div></div>
+        </div>
+      </div>
+      <div class="phone front">
+        <div class="screen">
+          <div class="m-head">
+            <div class="m-hello">Ndeewo,</div>
+            <div class="m-name">Chukwudubem</div>
+          </div>
+          <div class="m-balance-card">
+            <div class="m-balance-label">NET POSITION</div>
+            <div class="m-balance">+₦155,000</div>
+            <div class="m-balance-row">
+              <div>Owed to me<b class="amber">₦225,000</b></div>
+              <div>I owe<b class="red">₦70,000</b></div>
+            </div>
+          </div>
+          <div class="m-section">PEOPLE</div>
+          <div class="m-row"><div class="m-ava" style="background:#1E2A4A">TA</div><div class="t"><b>Tobi Adeyemi</b><span class="due">Due soon · 30 July</span></div><div class="m-amt owed">+₦70,000</div></div>
+          <div class="m-row"><div class="m-ava" style="background:#3A4D7E">NO</div><div class="t"><b>Ngozi Okafor</b><span class="over">Overdue</span></div><div class="m-amt owed">+₦155,000</div></div>
+          <div class="m-row"><div class="m-ava" style="background:#8B6F3A">CU</div><div class="t"><b>Chinedu Umeh</b><span class="ok">No due date</span></div><div class="m-amt iowe">−₦70,000</div></div>
+          <div class="m-tabbar">
+            <div class="m-tab"><div class="dot"></div>Home</div>
+            <div class="m-fab">+</div>
+            <div class="m-tab"><div class="dot"></div>History</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ── Features ── -->
+<section class="features" id="features">
+  <div class="kicker reveal">The dignified ledger</div>
+  <h2 class="reveal reveal-d1">Money between people, handled with care</h2>
+  <p class="lead reveal reveal-d2">Informal lending runs on trust — and trust runs on memory. Ụgwọ remembers every kobo for you, so awkward conversations never have to happen.</p>
+  <div class="grid">
+    <div class="feat reveal reveal-d1"><div class="fi">⚡</div><h3>Log in under 10 seconds</h3><p>Who, how much, when, and an optional due date. One floating button, one short form, done.</p></div>
+    <div class="feat reveal reveal-d2"><div class="fi">🤝</div><h3>People, not transactions</h3><p>Your home screen is a list of people and where you stand with each — one clean net balance per person.</p></div>
+    <div class="feat reveal reveal-d3"><div class="fi">💌</div><h3>Face-saving reminders</h3><p>"Hi Tobi, gentle reminder about the outstanding ₦70,000 from 14 June. Thank you 🙏" — composed for you, shared your way.</p></div>
+    <div class="feat reveal reveal-d1"><div class="fi">🔔</div><h3>Reminders that never leak</h3><p>Due-date alerts at 7, 3 and 1 day out — scheduled privately on your phone. Our servers can't even see the dates.</p></div>
+    <div class="feat reveal reveal-d2"><div class="fi">📄</div><h3>PDF statements</h3><p>Export a beautiful statement of every debt and repayment — generated entirely on your device.</p></div>
+    <div class="feat reveal reveal-d3"><div class="fi">🎉</div><h3>One small celebration</h3><p>No streaks, no gamification — just one quiet moment of joy every time a debt is fully settled.</p></div>
+  </div>
+</section>
+
+<!-- ── Security ── -->
+<section class="security" id="security">
+  <div class="inner">
+    <h2 class="reveal">We can't see your debts. Nobody can.</h2>
+    <p class="lead reveal reveal-d1">Debts are personal. Ụgwọ encrypts every record on your phone before it ever leaves — names, amounts, dates, notes. What reaches our servers is unreadable ciphertext.</p>
+    <div class="sec-grid">
+      <div class="sec-item reveal reveal-d1"><h3>End-to-end encryption</h3><p>AES-256-GCM with a key only your devices hold. Our servers sync ciphertext they cannot read.</p></div>
+      <div class="sec-item reveal reveal-d2"><h3>Device-level lock</h3><p>Face ID, fingerprint, or your phone's PIN protect the app. Nothing extra to remember.</p></div>
+      <div class="sec-item reveal reveal-d3"><h3>Works offline</h3><p>Your ledger lives on your phone first. No signal, no problem — sync catches up when you're back.</p></div>
+      <div class="sec-item reveal reveal-d4"><h3>Your data, your call</h3><p>Export everything as a PDF, or delete your account and every record in one tap.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Final CTA / Download ── -->
+<section class="final" id="download">
+  <h2 class="reveal">Who owes you?</h2>
+  <p class="reveal reveal-d1">Free. Private. Relationship-first.</p>
+  <div class="store-row reveal reveal-d2">
+    <div class="store-btn" role="img" aria-label="Coming soon on the App Store">
+      <svg class="store-ico" viewBox="0 0 384 512" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+      <span class="store-txt"><small>Download on the</small><strong>App Store</strong></span>
+      <span class="soon-tag">Soon</span>
+    </div>
+    <div class="store-btn" role="img" aria-label="Coming soon on Google Play">
+      <svg class="store-ico" viewBox="0 0 512 512" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1zM47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.6-256L47 0zm425.2 225.6l-58.9-34.1-65.7 64.5 65.7 64.5 60.1-34.1c18-14.3 18-46.5-1.2-60.8zM104.6 499l280.8-161.2-60.1-60.1L104.6 499z"/></svg>
+      <span class="store-txt"><small>GET IT ON</small><strong>Google Play</strong></span>
+      <span class="soon-tag">Soon</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-grid">
+    <div>
+      <div class="foot-brand">Ụgw<span>ọ</span></div>
+      <div class="foot-tag">A venture by <a href="https://nippysky.com">NIPPYSKY</a> · By the makers of <a href="https://aku.nippysky.com">Akù</a></div>
+    </div>
+    <div class="foot-links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/delete-account">Delete your account</a>
+    </div>
+    <div class="foot-links">
+      <a href="mailto:contact@nippysky.com">contact@nippysky.com</a>
+      <a href="https://nippysky.com">nippysky.com</a>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <div>© 2026 NIPPYSKY. All rights reserved.</div>
+    <div>Ụgwọ by <a href="https://nippysky.com">NIPPYSKY</a></div>
+  </div>
+</footer>
+
+<script src="/nav.js" defer></script>
+</body>
+</html>

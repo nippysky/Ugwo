@@ -12,7 +12,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -34,7 +33,6 @@ import {
   getMonth,
   setMonth,
   setYear,
-  startOfYear,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -77,12 +75,6 @@ function toISO(d: Date): string {
 function mondayBased(d: Date): number {
   const dow = getDay(d);
   return dow === 0 ? 6 : dow - 1;
-}
-
-/** Year range to display in year/month picker — 10 years before/after current view. */
-function buildYearRange(centreYear: number): number[] {
-  const start = centreYear - 6;
-  return Array.from({ length: 15 }, (_, i) => start + i);
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────

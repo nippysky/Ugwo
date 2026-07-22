@@ -1,8 +1,12 @@
 /**
- * OnboardingHeader — unified step indicator + back button for all 9 onboarding steps.
+ * OnboardingHeader — segmented step indicator + back button.
+ *
+ * Used by the three form steps (name → email → verify); the welcome slides
+ * and the device-security screen have their own full-bleed layouts and don't
+ * show this header.
  *
  * Renders in the normal layout flow (not absolute) so it never overlaps content.
- * Supports a `dark` prop for screens with a dark background (pin-setup, biometric).
+ * Supports a `dark` prop for screens with a dark background.
  */
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';

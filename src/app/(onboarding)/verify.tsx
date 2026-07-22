@@ -90,6 +90,9 @@ export default function VerifyScreen() {
     try {
       const name        = OnboardingStorage.getName() ?? undefined;
       const storedEmail = OnboardingStorage.getEmail() ?? email;
+      // No intent here: by this point the account already exists (created on
+      // the initial send from email.tsx), so the sign-up/sign-in gate on the
+      // server doesn't need to run again — it'd only get in the way.
       await signIn(storedEmail, name);
       setResent(true);
       setTimeout(() => setResent(false), 4000);
@@ -159,8 +162,8 @@ export default function VerifyScreen() {
         bottomOffset={20}
       >
         <OnboardingHeader
-          step={4}
-          total={6}
+          step={3}
+          total={3}
           onBack={() => router.back()}
           dark={false}
         />

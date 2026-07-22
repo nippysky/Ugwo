@@ -2,10 +2,13 @@
  * Home — the ledger at a glance.
  *
  *   · Hero: net position (+₦155,000) with Owed-to-me / I-owe sub-figures
- *   · People-first list: avatar, name, net balance, status chip
- *   · FAB → "Owed to me" / "I owe" → AddDebtSheet (<10s logging)
+ *   · People-first list: direction badge, name, net balance, status chip
+ *   · History icon (top-right) → History tab
+ *   · Logging a debt happens from the center FAB in the tab bar (see
+ *     (tabs)/_layout.tsx), which opens the "Owed to me / I owe" picker
+ *     and then AddDebtSheet from anywhere in the app.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   FlatList,
   Pressable,
@@ -16,22 +19,30 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { Plus, HandCoins, ArrowDownLeft, ArrowUpRight, Users } from 'lucide-react-native';
+import { History, ArrowDownLeft, ArrowUpRight, Users } from 'lucide-react-native';
 import { useTheme } from '../../theme';
 import { Palette } from '../../theme/colors';
 import { FontFamily, FontSize } from '../../theme/typography';
 import { Layout, Spacing } from '../../theme/spacing';
-import { InitialsAvatar } from '../../components/ui/InitialsAvatar';
+import { DirectionBadge } from '../../components/ui/DirectionBadge';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { AddDebtSheet } from '../../components/ledger/AddDebtSheet';
 import { useAuthStore } from '../../store/auth.store';
 import { useLedgerStore } from '../../store/ledger.store';
 import { useSyncStore } from '../../store/sync.store';
+import { useAddDebtStore } from '../../store/add-debt.store';
 import { useCurrencyFormat } from '../../hooks/useCurrencyFormat';
 import { allPersonBalances, netPosition } from '../../lib/debt-math';
 import { friendlyDate } from '../../lib/reminder-message';
-import type { DebtDirection, DueStatus, PersonBalance } from '../../types';
+import type { DueStatus, PersonBalance } from '../../types';
+
+// ─── Time-of-day greeting (device-local time zone) ────────────────────────────
+
+function greetingForHour(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 // ─── Status chip config ───────────────────────────────────────────────────────
 
@@ -46,7 +57,7 @@ const STATUS_META: Record<DueStatus, { label: string; colorKey: 'statusOverdue' 
 // ─── Screen ────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const { colors, text, isDark } = useTheme();
+  const { colors, text } = useTheme();
   const insets  = useSafeAreaInsets();
   const router  = useRouter();
 
@@ -56,10 +67,8 @@ export default function HomeScreen() {
   const repayments  = useLedgerStore((s) => s.repayments);
   const load        = useLedgerStore((s) => s.load);
   const syncVersion = useSyncStore((s) => s.syncVersion);
+  const openSheet   = useAddDebtStore((s) => s.openSheet);
   const { fmt }     = useCurrencyFormat();
-
-  const [fabOpen, setFabOpen]     = useState(false);
-  const [sheetDir, setSheetDir]   = useState<DebtDirection | null>(null);
 
   // Load on focus + whenever a sync pull lands
   useFocusEffect(
@@ -78,14 +87,9 @@ export default function HomeScreen() {
   );
 
   const firstName = user?.name?.split(/\s+/)[0] ?? '';
+  const greeting  = greetingForHour();
   const netSign   = totals.net >= 0 ? '+' : '−';
   const netColor  = totals.net >= 0 ? Palette.amber : '#F0A196';
-
-  const openSheet = (dir: DebtDirection) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setFabOpen(false);
-    setSheetDir(dir);
-  };
 
   // ── Person row ──────────────────────────────────────────────────────────
   const renderRow = ({ item, index }: { item: PersonBalance; index: number }) => {
@@ -106,7 +110,7 @@ export default function HomeScreen() {
             },
           ]}
         >
-          <InitialsAvatar name={item.person.name} size={44} />
+          <DirectionBadge owedToMe={positive} size={44} />
           <View style={styles.rowBody}>
             <Text style={[text.bodyMedium, { color: colors.text }]} numberOfLines={1}>
               {item.person.name}
@@ -155,11 +159,25 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View style={{ gap: Spacing[4], marginBottom: Spacing[2] }}>
             {/* Greeting */}
-            <View>
-              <Text style={[text.bodySm, { color: colors.textTertiary }]}>
-                {firstName ? `Ndeewo, ${firstName}` : 'Ndeewo'}
-              </Text>
-              <Text style={[styles.screenTitle, { color: colors.text }]}>Your ledger</Text>
+            <View style={styles.greetingRow}>
+              <View>
+                <Text style={[text.bodySm, { color: colors.textTertiary }]}>
+                  {firstName ? `${greeting}, ${firstName}` : greeting}
+                </Text>
+                <Text style={[styles.screenTitle, { color: colors.text }]}>Your ledger</Text>
+              </View>
+              <Pressable
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="History"
+                onPress={() => router.push('/(tabs)/history' as never)}
+                style={({ pressed }) => [
+                  styles.historyBtn,
+                  { backgroundColor: colors.card, borderColor: colors.borderLight, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <History size={19} color={colors.textSecondary as string} strokeWidth={1.8} />
+              </Pressable>
             </View>
 
             {/* Hero card */}
@@ -209,60 +227,6 @@ export default function HomeScreen() {
           />
         }
       />
-
-      {/* FAB + direction sheet */}
-      {fabOpen && (
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
-          onPress={() => setFabOpen(false)}
-        />
-      )}
-      <View style={[styles.fabArea, { bottom: Layout.tabBarHeight + insets.bottom + Spacing[5] }]}>
-        {fabOpen && (
-          <Animated.View entering={FadeInDown.duration(200)} style={styles.fabMenu}>
-            <Pressable
-              onPress={() => openSheet('owed_to_me')}
-              style={[styles.fabOption, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <ArrowDownLeft size={18} color={colors.owedToMe as string} />
-              <Text style={[text.bodyMedium, { color: colors.text }]}>Owed to me</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => openSheet('i_owe')}
-              style={[styles.fabOption, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
-              <ArrowUpRight size={18} color={colors.iOwe as string} />
-              <Text style={[text.bodyMedium, { color: colors.text }]}>I owe</Text>
-            </Pressable>
-          </Animated.View>
-        )}
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-            setFabOpen((v) => !v);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Log a debt"
-          style={({ pressed }) => [
-            styles.fab,
-            {
-              backgroundColor: colors.primary,
-              shadowColor:     colors.primary,
-              transform:       [{ rotate: fabOpen ? '45deg' : '0deg' }, { scale: pressed ? 0.95 : 1 }],
-              borderColor:     isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.6)',
-            },
-          ]}
-        >
-          <Plus size={28} color={Palette.paper} strokeWidth={2} />
-        </Pressable>
-      </View>
-
-      {/* Add-debt sheet */}
-      <AddDebtSheet
-        visible={sheetDir !== null}
-        direction={sheetDir ?? 'owed_to_me'}
-        onClose={() => setSheetDir(null)}
-      />
     </View>
   );
 }
@@ -271,6 +235,20 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  greetingRow: {
+    flexDirection:  'row',
+    alignItems:     'flex-end',
+    justifyContent: 'space-between',
+  },
+  historyBtn: {
+    width:          40,
+    height:         40,
+    borderRadius:   20,
+    borderWidth:    1,
+    alignItems:     'center',
+    justifyContent: 'center',
+    marginBottom:   4,
+  },
   screenTitle: {
     fontFamily:    FontFamily.displayLight,
     fontSize:      FontSize['3xl'],
@@ -291,8 +269,8 @@ const styles = StyleSheet.create({
   },
   heroNet: {
     fontFamily:    FontFamily.displayLight,
-    fontSize:      40,
-    letterSpacing: -1,
+    fontSize:      30,
+    letterSpacing: -0.6,
     marginTop:     6,
     fontVariant:   ['tabular-nums'],
   },
@@ -352,35 +330,5 @@ const styles = StyleSheet.create({
     fontFamily:  FontFamily.sansSemiBold,
     fontSize:    FontSize.base,
     fontVariant: ['tabular-nums'],
-  },
-
-  // FAB
-  fabArea: {
-    position:   'absolute',
-    right:      Layout.screenPadding,
-    alignItems: 'flex-end',
-    gap:        12,
-  },
-  fabMenu: { gap: 10, alignItems: 'flex-end' },
-  fabOption: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               10,
-    paddingVertical:   12,
-    paddingHorizontal: 18,
-    borderRadius:      100,
-    borderWidth:       1,
-  },
-  fab: {
-    width:          60,
-    height:         60,
-    borderRadius:   30,
-    alignItems:     'center',
-    justifyContent: 'center',
-    borderWidth:    2,
-    shadowOffset:   { width: 0, height: 6 },
-    shadowOpacity:  0.35,
-    shadowRadius:   10,
-    elevation:      10,
   },
 });

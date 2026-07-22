@@ -46,13 +46,6 @@ function trimDecimals(n: number, places: number): string {
 }
 
 /**
- * Percentage string. e.g. 0.75 → "75%"
- */
-export function formatPercent(ratio: number): string {
-  return `${Math.round(ratio * 100)}%`;
-}
-
-/**
  * Convert a minor-unit amount (kobo/pesewas/cents) from one currency to another
  * using USD-based exchange rates (e.g. from exchangerate-api.com v4).
  *

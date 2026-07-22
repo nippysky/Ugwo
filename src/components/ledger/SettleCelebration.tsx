@@ -6,7 +6,7 @@
  * Pure react-native-reanimated — no extra dependencies.
  */
 import React, { useEffect, useMemo } from 'react';
-import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Modal, Pressable, StyleSheet, Text } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,

@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { View, StatusBar, Platform, AppState } from 'react-native';
+import { View, StatusBar, AppState } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
-import * as ExpoNotifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -13,16 +12,12 @@ import { useColorScheme } from 'react-native';
 import { initializeDatabase } from '../lib/database/client';
 import { useAuthStore } from '../store/auth.store';
 import { useUIStore } from '../store/ui.store';
-import { useNotifPrefsStore } from '../store/notif-prefs.store';
-import { useNotifHistoryStore } from '../store/notif-history.store';
 import { ToastContainer } from '../components/ui/ToastContainer';
 import { AppLoader } from '../components/ui/AppLoader';
 import { LightColors, DarkColors } from '../theme/colors';
 import { notificationService, useNotificationNavigation } from '../lib/notifications';
-import { registerPushToken } from '../lib/api-client';
 import { useSyncStore } from '../store/sync.store';
 import { wsClient } from '../lib/sync/ws-client';
-import * as Device from 'expo-device';
 
 // Prevent auto-hide while fonts + auth load
 SplashScreen.preventAutoHideAsync();
@@ -34,10 +29,6 @@ export default function RootLayout() {
 
   const { isInitialized, user, session, isLocked, hasOnboarded, initialize } = useAuthStore();
   const { themeMode, loadSettings } = useUIStore();
-  const loadNotifPrefs = useNotifPrefsStore((s) => s.load);
-
-  // Track whether we've registered the push token for this session
-  const pushTokenRegistered = useRef(false);
 
   // Resolve dark mode: respect in-app preference, then fall back to system
   const isDark =
@@ -70,15 +61,16 @@ export default function RootLayout() {
       // Load persisted theme + currency before auth so the correct theme
       // is applied from the very first render after cold start.
       await loadSettings();
-      loadNotifPrefs();
       await initialize();
 
       // Request notification permissions, set up Android channels, and keep
       // the monthly recap pointed at the next month boundary. All idempotent.
+      // Reminders are always-on in Ụgwọ — there's no user toggle to check.
       const granted = await notificationService.requestPermissions();
       if (granted) {
         await notificationService.setupNotificationChannels();
         await notificationService.scheduleMonthlyRecap();
+        await notificationService.scheduleLogNudges();
       }
     })();
   }, []);
@@ -115,8 +107,10 @@ export default function RootLayout() {
         // Clear the notification badge
         notificationService.clearBadge().catch(() => {});
 
-        // Keep the monthly recap scheduled across month boundaries
+        // Keep the monthly recap scheduled across month boundaries, and top
+        // up the rolling "log a debt" nudge queue as older ones get used up
         notificationService.scheduleMonthlyRecap().catch(() => {});
+        notificationService.scheduleLogNudges().catch(() => {});
 
         // Pull delta from server — only fires when DEK is loaded (unlocked)
         const { dek, lastSyncAt } = useSyncStore.getState();
@@ -138,86 +132,6 @@ export default function RootLayout() {
       wsClient.disconnect();
     }
   }, [user, session, isLocked]);
-
-  // ── Push token registration ──────────────────────────────────────────
-  // Register after the user is authenticated and unlocked, once per session.
-  useEffect(() => {
-    if (!Device.isDevice) return;
-    if (!session || !user || isLocked || pushTokenRegistered.current) return;
-    pushTokenRegistered.current = true;
-
-    (async () => {
-      try {
-        const token = await notificationService.getExpoPushToken();
-        if (!token) return;
-        const platform: 'ios' | 'android' = Platform.OS === 'android' ? 'android' : 'ios';
-        await registerPushToken(token, platform);
-      } catch (err) {
-        console.warn('[layout] Push token registration failed:', err);
-      }
-    })();
-  }, [session, user, isLocked]);
-
-  // Reset flag on sign-out so the next login re-registers
-  useEffect(() => {
-    if (!session) pushTokenRegistered.current = false;
-  }, [session]);
-
-  // ── Load notification history when authenticated + unlocked ─────────
-  useEffect(() => {
-    if (user && !isLocked) {
-      useNotifHistoryStore.getState().load(user.id);
-    }
-  }, [user, isLocked]);
-
-  // ── Persist received notifications to history ────────────────────────
-  const savedNotifIds = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!user) return;
-
-    const persistNotif = (
-      identifier: string,
-      title: string | null | undefined,
-      body:  string | null | undefined,
-      data:  Record<string, unknown> | null | undefined,
-    ) => {
-      if (!title) return;
-      if (savedNotifIds.current.has(identifier)) return; // deduplicate
-      savedNotifIds.current.add(identifier);
-      useNotifHistoryStore.getState().add({
-        userId:      user.id,
-        type:        (data?.type as string) ?? 'general',
-        title,
-        body:        body ?? '',
-        referenceId: (data?.id as string) ?? null,
-      });
-    };
-
-    const foregroundSub = ExpoNotifications.addNotificationReceivedListener(
-      (notif) => {
-        const { title, body, data } = notif.request.content;
-        persistNotif(notif.request.identifier, title, body, data as Record<string, unknown>);
-      },
-    );
-
-    const responseSub = ExpoNotifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const { title, body, data } = response.notification.request.content;
-        persistNotif(
-          response.notification.request.identifier,
-          title,
-          body,
-          data as Record<string, unknown>,
-        );
-      },
-    );
-
-    return () => {
-      foregroundSub.remove();
-      responseSub.remove();
-    };
-  }, [user]);
 
   // ── Navigation guard ─────────────────────────────────────────────────
   useEffect(() => {

@@ -39,9 +39,18 @@ CREATE DATABASE ugwo_db OWNER ugwo_user;
 From your Mac (project root `~/Documents/Projects/ugwo`):
 
 ```bash
-rsync -avz --exclude node_modules --exclude dist --exclude .env \
+rsync -avz --delete --exclude node_modules --exclude dist --exclude .env --exclude logs \
   server/ root@178.128.165.128:/var/www/ugwo-api/
 ```
+
+`--delete` mirrors the droplet to match `server/` exactly — without it, files you delete
+locally (e.g. an old route) stay behind on the server and can break the next build.
+
+`--exclude logs` matters just as much: `logs/` is created once on the droplet (step 3)
+and isn't tracked in the local repo, so without this exclude, `--delete` wipes it on
+every redeploy. PM2 needs that folder to open its log file handles when it spawns the
+process — if it's missing, the app can crash-loop on startup with an empty/misleading
+error log (this happened during the auth-hardening deploy on 2026-07-22).
 
 (Repeat this same command for every future deploy.)
 
@@ -110,11 +119,20 @@ request a magic link and confirm the email arrives from `Ụgwọ <auth@nippysky
 
 ```bash
 # Mac
-rsync -avz --exclude node_modules --exclude dist --exclude .env \
+rsync -avz --delete --exclude node_modules --exclude dist --exclude .env --exclude logs \
   server/ root@178.128.165.128:/var/www/ugwo-api/
 
 # Droplet
 cd /var/www/ugwo-api && npm install && npm run build && pm2 restart ugwo-api
+```
+
+If `pm2 restart` ever errors with "Process not found" or the app shows `stopped` with
+`uptime: 0` in `pm2 list`, don't fight it — just reset the entry cleanly:
+
+```bash
+pm2 delete ugwo-api
+pm2 start ecosystem.config.cjs --only ugwo-api --env production
+pm2 save
 ```
 
 Static site changes (server/public) need no restart — nginx serves them directly.

@@ -4,7 +4,7 @@
  * This route handles the deep link that arrives after the user taps the magic
  * link in their email. The server verifies the token and redirects to:
  *
- *   aku://auth-callback?token=JWT&user=BASE64_ENCODED_JSON
+ *   ugwo://auth-callback?token=JWT&user=BASE64_ENCODED_JSON
  *
  * Expo Router intercepts the deep link and renders this screen.
  * We extract the JWT + user, persist them, then route to device-security setup or tabs.

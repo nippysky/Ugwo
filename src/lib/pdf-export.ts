@@ -38,20 +38,45 @@ function statusLabel(debt: Debt, today: string): string {
   }
 }
 
+/** Inclusive 'YYYY-MM-DD' bounds. Either side may be omitted for open-ended. */
+export interface StatementRange {
+  from: string | null;
+  to:   string | null;
+}
+
+function inRange(dateStr: string | null | undefined, range?: StatementRange): boolean {
+  if (!range || (!range.from && !range.to)) return true;
+  if (!dateStr) return false;
+  if (range.from && dateStr < range.from) return false;
+  if (range.to && dateStr > range.to) return false;
+  return true;
+}
+
+function rangeLabel(range?: StatementRange): string {
+  if (!range || (!range.from && !range.to)) return 'All time';
+  if (range.from && range.to) return `${friendlyDate(range.from)} – ${friendlyDate(range.to)}`;
+  if (range.from) return `From ${friendlyDate(range.from)}`;
+  return `Through ${friendlyDate(range.to!)}`;
+}
+
 export function buildStatementHtml(opts: {
   userName:   string;
   persons:    Person[];
   debts:      Debt[];
   repayments: Repayment[];
   symbol:     string;
+  /** Optional filter — when set, only debts active/settled in this window
+   *  appear in the tables below (the current net position always reflects
+   *  the full ledger, not just the filtered window). */
+  range?:     StatementRange;
 }): string {
-  const { userName, persons, debts, repayments, symbol } = opts;
+  const { userName, persons, debts, repayments, symbol, range } = opts;
   const today = todayStr();
   const { net, owedToMe, iOwe } = netPosition(debts, repayments);
   const personName = (id: string) => persons.find((p) => p.id === id)?.name ?? 'Unknown';
 
   const openRows = debts
-    .filter((d) => d.status === 'open')
+    .filter((d) => d.status === 'open' && inRange(d.incurredOn, range))
     .sort((a, b) => (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999'))
     .map((d) => {
       const b = withBalance(d, repayments);
@@ -71,7 +96,7 @@ export function buildStatementHtml(opts: {
     .join('');
 
   const settledRows = debts
-    .filter((d) => d.status === 'settled')
+    .filter((d) => d.status === 'settled' && inRange(d.settledAt?.slice(0, 10), range))
     .sort((a, b) => (b.settledAt ?? '').localeCompare(a.settledAt ?? ''))
     .map((d) => {
       const dir = d.direction === 'owed_to_me' ? 'Owed to me' : 'I owe';
@@ -120,6 +145,7 @@ export function buildStatementHtml(opts: {
     <h1>Ụgwọ — Debt Statement</h1>
     <div class="sub">Owed · Remembered · Settled</div>
     <div class="meta">${esc(userName)} &nbsp;·&nbsp; Generated ${generatedOn} &nbsp;·&nbsp; Prepared on-device</div>
+    <div class="meta" style="margin-top:2px;">Period: ${esc(rangeLabel(range))}</div>
   </div>
 
   <div class="totals">
@@ -168,6 +194,7 @@ export async function exportStatementPdf(opts: {
   debts:      Debt[];
   repayments: Repayment[];
   symbol:     string;
+  range?:     StatementRange;
 }): Promise<void> {
   const html = buildStatementHtml(opts);
   const { uri } = await Print.printToFileAsync({ html });

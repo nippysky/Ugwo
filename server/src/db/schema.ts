@@ -90,21 +90,3 @@ export const syncRecords = pgTable('sync_records', {
   // Upsert lookup: "does this entity already exist for this user?"
   index('idx_sync_user_entity').on(t.userId, t.entityType, t.entityId),
 ]);
-
-// ─── Push Tokens ──────────────────────────────────────────────────────────────
-// One row per (user, device). Reminders are LOCAL on-device — this layer
-// exists for future silent-sync wakes and product announcements only.
-
-export const pushTokens = pgTable('push_tokens', {
-  id:       text('id').primaryKey(),             // UUID v4
-  userId:   text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  /** Expo push token: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]" */
-  token:    text('token').notNull().unique(),
-  platform: text('platform').notNull(),          // 'ios' | 'android'
-  /** IANA timezone string e.g. 'Africa/Lagos'. */
-  timezone: text('timezone'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-}, (t) => [
-  index('idx_push_tokens_user').on(t.userId),
-]);

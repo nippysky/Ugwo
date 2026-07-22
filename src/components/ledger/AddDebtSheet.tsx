@@ -19,7 +19,6 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { AmountInput } from '../ui/AmountInput';
 import { UgwoDatePicker } from '../ui/UgwoDatePicker';
-import { InitialsAvatar } from '../ui/InitialsAvatar';
 import { useTheme } from '../../theme';
 import { useAuthStore } from '../../store/auth.store';
 import { useLedgerStore } from '../../store/ledger.store';
@@ -35,17 +34,22 @@ interface AddDebtSheetProps {
   personId?: string | null;
 }
 
+/** How many matching people to show at once — keeps the picker usable no
+ *  matter how many people are in the ledger (10 or 1,000). */
+const MAX_SUGGESTIONS = 6;
+
 export function AddDebtSheet({ visible, direction, onClose, personId = null }: AddDebtSheetProps) {
   const { colors, text, spacing } = useTheme();
   const user     = useAuthStore((s) => s.user);
   const persons  = useLedgerStore((s) => s.persons);
+  const debts    = useLedgerStore((s) => s.debts);
   const addDebt  = useLedgerStore((s) => s.addDebt);
   const addPerson = useLedgerStore((s) => s.addPerson);
   const currency = useUIStore((s) => s.currency);
   const showToast = useUIStore((s) => s.showToast);
 
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(personId);
-  const [newName, setNewName]     = useState('');
+  const [query, setQuery]         = useState('');
   const [amount, setAmount]       = useState(0);
   const [incurredOn, setIncurredOn] = useState(todayStr());
   const [dueOn, setDueOn]         = useState<string | null>(null);
@@ -54,15 +58,35 @@ export function AddDebtSheet({ visible, direction, onClose, personId = null }: A
   const [saving, setSaving]       = useState(false);
 
   const owedToMe = direction === 'owed_to_me';
+  const selectedPerson = persons.find((p) => p.id === selectedPersonId) ?? null;
 
-  const sortedPersons = useMemo(
-    () => [...persons].sort((a, b) => a.name.localeCompare(b.name)),
-    [persons],
-  );
+  // Most-recently-logged-with first, so the people you deal with often
+  // surface without typing anything — a search field, not an endless list.
+  const lastActivityByPerson = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of debts) {
+      const existing = map.get(d.personId);
+      if (!existing || d.createdAt > existing) map.set(d.personId, d.createdAt);
+    }
+    return map;
+  }, [debts]);
+
+  const suggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const ranked = [...persons].sort((a, b) => {
+      const aT = lastActivityByPerson.get(a.id) ?? a.createdAt;
+      const bT = lastActivityByPerson.get(b.id) ?? b.createdAt;
+      return bT.localeCompare(aT);
+    });
+    const matches = q ? ranked.filter((p) => p.name.toLowerCase().includes(q)) : ranked;
+    return matches.slice(0, MAX_SUGGESTIONS);
+  }, [persons, query, lastActivityByPerson]);
+
+  const exactMatch = persons.some((p) => p.name.trim().toLowerCase() === query.trim().toLowerCase());
 
   const reset = () => {
     setSelectedPersonId(personId);
-    setNewName('');
+    setQuery('');
     setAmount(0);
     setIncurredOn(todayStr());
     setDueOn(null);
@@ -76,7 +100,7 @@ export function AddDebtSheet({ visible, direction, onClose, personId = null }: A
   };
 
   const canSave =
-    amount > 0 && (selectedPersonId !== null || newName.trim().length > 0);
+    amount > 0 && (selectedPersonId !== null || query.trim().length > 0);
 
   const handleSave = async () => {
     if (!user || !canSave || saving) return;
@@ -84,7 +108,7 @@ export function AddDebtSheet({ visible, direction, onClose, personId = null }: A
     try {
       let pid = selectedPersonId;
       if (!pid) {
-        const person = await addPerson(user.id, newName.trim());
+        const person = await addPerson(user.id, query.trim());
         pid = person.id;
       }
       await addDebt({
@@ -124,55 +148,52 @@ export function AddDebtSheet({ visible, direction, onClose, personId = null }: A
 
         {/* Who */}
         <Text style={[styles.sectionLabel, text.label, { color: colors.textTertiary }]}>WHO</Text>
-        {sortedPersons.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: spacing[3] }}
-            contentContainerStyle={{ gap: spacing[2] }}
-            keyboardShouldPersistTaps="handled"
+        {selectedPerson ? (
+          <Pressable
+            onPress={() => setSelectedPersonId(null)}
+            style={[styles.selectedChip, { backgroundColor: colors.primary, borderColor: colors.primary }]}
           >
-            {sortedPersons.map((p) => {
-              const selected = selectedPersonId === p.id;
-              return (
-                <Pressable
-                  key={p.id}
-                  onPress={() => {
-                    setSelectedPersonId(selected ? null : p.id);
-                    if (!selected) setNewName('');
-                  }}
-                  style={[
-                    styles.personChip,
-                    {
-                      backgroundColor: selected ? colors.primary : colors.backgroundSecondary,
-                      borderColor:     selected ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <InitialsAvatar name={p.name} size={22} />
-                  <Text
-                    style={[
-                      text.bodySm,
-                      { color: selected ? colors.textInverse : colors.text },
-                    ]}
-                    numberOfLines={1}
+            <Text style={[text.bodyMedium, { color: colors.textInverse, flex: 1 }]} numberOfLines={1}>
+              {selectedPerson.name}
+            </Text>
+            <X size={16} color={colors.textInverse as string} />
+          </Pressable>
+        ) : (
+          <>
+            <Input
+              label={persons.length > 0 ? 'Search or add someone new' : 'Their name'}
+              placeholder="e.g. Tobi"
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="words"
+            />
+            {suggestions.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginTop: spacing[2] }}
+                contentContainerStyle={{ gap: spacing[2] }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {suggestions.map((p) => (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => { setSelectedPersonId(p.id); setQuery(''); }}
+                    style={[styles.personChip, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
                   >
-                    {p.name}
-                  </Text>
-                  {selected && <X size={14} color={colors.textInverse as string} />}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-        {selectedPersonId === null && (
-          <Input
-            label={sortedPersons.length > 0 ? 'Or add someone new' : 'Their name'}
-            placeholder="e.g. Tobi"
-            value={newName}
-            onChangeText={setNewName}
-            autoCapitalize="words"
-          />
+                    <Text style={[text.bodySm, { color: colors.text }]} numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+            {query.trim().length > 0 && !exactMatch && (
+              <Text style={[text.caption, { color: colors.textTertiary, marginTop: spacing[2] }]}>
+                No match — "{query.trim()}" will be logged as a new person.
+              </Text>
+            )}
+          </>
         )}
 
         {/* Amount */}
@@ -274,6 +295,15 @@ const styles = StyleSheet.create({
     borderRadius:      100,
     borderWidth:       1,
     maxWidth:          180,
+  },
+  selectedChip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               8,
+    paddingVertical:   12,
+    paddingHorizontal: 14,
+    borderRadius:      14,
+    borderWidth:       1,
   },
   dateRow: {
     flexDirection: 'column',

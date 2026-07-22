@@ -21,10 +21,9 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 
-import authRouter          from './routes/auth.js';
-import userRouter          from './routes/user.js';
-import syncRouter          from './routes/sync.js';
-import notificationsRouter from './routes/notifications.js';
+import authRouter from './routes/auth.js';
+import userRouter from './routes/user.js';
+import syncRouter from './routes/sync.js';
 
 import {
   globalRateLimit,
@@ -74,10 +73,9 @@ app.use('/api/auth/magic-link', magicLinkRateLimit());
 app.use('/api/auth/magic-link/verify', strictRateLimit());
 app.use('/api/auth/magic-link/verify-otp', strictRateLimit());
 
-app.route('/api/auth',          authRouter);
-app.route('/api/user',          userRouter);
-app.route('/api/sync',          syncRouter);
-app.route('/api/notifications', notificationsRouter);
+app.route('/api/auth', authRouter);
+app.route('/api/user', userRouter);
+app.route('/api/sync', syncRouter);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 

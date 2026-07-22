@@ -30,12 +30,10 @@ import { useTheme } from '../../theme';
 import { Palette } from '../../theme/colors';
 import { FontFamily, FontSize } from '../../theme/typography';
 import { Layout, Spacing } from '../../theme/spacing';
-import { InitialsAvatar } from '../../components/ui/InitialsAvatar';
-import { Button } from '../../components/ui/Button';
+import { DirectionBadge } from '../../components/ui/DirectionBadge';
 import { AddDebtSheet } from '../../components/ledger/AddDebtSheet';
 import { RecordRepaymentSheet } from '../../components/ledger/RecordRepaymentSheet';
 import { SettleCelebration } from '../../components/ledger/SettleCelebration';
-import { useAuthStore } from '../../store/auth.store';
 import { useLedgerStore } from '../../store/ledger.store';
 import { useUIStore } from '../../store/ui.store';
 import { useCurrencyFormat } from '../../hooks/useCurrencyFormat';
@@ -60,7 +58,6 @@ export default function PersonLedgerScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const user       = useAuthStore((s) => s.user);
   const persons    = useLedgerStore((s) => s.persons);
   const debts      = useLedgerStore((s) => s.debts);
   const repayments = useLedgerStore((s) => s.repayments);
@@ -176,13 +173,14 @@ export default function PersonLedgerScreen() {
         <Animated.View
           key={`d_${d.id}`}
           entering={FadeInDown.delay(Math.min(index * 30, 200)).duration(250)}
+          style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.borderLight }]}
         >
           <Pressable
             onLongPress={() => confirmDeleteDebt(d)}
             onPress={() => {
               if (!settled && d.outstanding > 0) setRepayFor(d);
             }}
-            style={[styles.entry, { backgroundColor: colors.card, borderColor: colors.borderLight }]}
+            style={styles.entryTop}
           >
             <View
               style={[
@@ -197,11 +195,10 @@ export default function PersonLedgerScreen() {
                   : <ArrowUpRight size={18} color={colors.iOwe as string} />}
             </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[text.bodyMedium, { color: colors.text }]}>
+              <Text style={[text.bodyMedium, { color: colors.text }]} numberOfLines={1}>
                 {settled
                   ? 'Settled'
                   : owed ? 'Loan — owed to you' : 'Loan — you owe'}
-                {d.note ? ` · ${d.note}` : ''}
               </Text>
               <Text style={[text.caption, { color: colors.textTertiary }]}>
                 {friendlyDate(d.incurredOn)}
@@ -224,6 +221,13 @@ export default function PersonLedgerScreen() {
               {fmt(settled ? d.principal : d.outstanding)}
             </Text>
           </Pressable>
+          {d.note ? (
+            <View style={[styles.noteBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.borderLight }]}>
+              <Text style={[text.caption, { color: colors.textSecondary }]}>
+                {d.note}
+              </Text>
+            </View>
+          ) : null}
         </Animated.View>
       );
     }
@@ -233,15 +237,14 @@ export default function PersonLedgerScreen() {
       <Animated.View
         key={`r_${repayment.id}`}
         entering={FadeInDown.delay(Math.min(index * 30, 200)).duration(250)}
+        style={[styles.entryCard, styles.repaymentEntry, { borderColor: colors.borderLight }]}
       >
-        <View style={[styles.entry, styles.repaymentEntry, { borderColor: colors.borderLight }]}>
+        <View style={styles.entryTop}>
           <View style={[styles.entryIcon, { backgroundColor: colors.successBg }]}>
             <HandCoins size={18} color={colors.success as string} />
           </View>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={[text.bodyMedium, { color: colors.text }]}>
-              Repayment{repayment.note ? ` · ${repayment.note}` : ''}
-            </Text>
+            <Text style={[text.bodyMedium, { color: colors.text }]}>Repayment</Text>
             <Text style={[text.caption, { color: colors.textTertiary }]}>
               {friendlyDate(repayment.paidOn)}
               {debt.direction === 'owed_to_me' ? ' · received' : ' · paid'}
@@ -251,6 +254,13 @@ export default function PersonLedgerScreen() {
             {fmt(repayment.amount)}
           </Text>
         </View>
+        {repayment.note ? (
+          <View style={[styles.noteBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.borderLight }]}>
+            <Text style={[text.caption, { color: colors.textSecondary }]}>
+              {repayment.note}
+            </Text>
+          </View>
+        ) : null}
       </Animated.View>
     );
   };
@@ -280,11 +290,16 @@ export default function PersonLedgerScreen() {
           </View>
 
           <View style={styles.headerBody}>
-            <InitialsAvatar name={person.name} size={56} />
+            <DirectionBadge owedToMe={positive} size={56} />
             <Text style={styles.personName}>{person.name}</Text>
             {person.note ? (
               <Text style={styles.personNote}>{person.note}</Text>
             ) : null}
+          </View>
+
+          {/* Balance — its own box, separate from the name area above so the
+              direction label and the amount both get room to breathe. */}
+          <View style={[styles.balanceBox, { backgroundColor: 'rgba(255,255,255,0.07)', borderColor: 'rgba(250,249,247,0.14)' }]}>
             <Text style={styles.balanceLabel}>
               {positive ? 'OWES YOU' : 'YOU OWE'}
             </Text>
@@ -409,24 +424,33 @@ const styles = StyleSheet.create({
     fontSize:   FontSize.sm,
     color:      'rgba(250,249,247,0.55)',
   },
+  balanceBox: {
+    alignItems:        'center',
+    borderRadius:       20,
+    borderWidth:         1,
+    paddingVertical:     Spacing[4],
+    paddingHorizontal:   Spacing[4],
+    marginTop:           Spacing[4],
+    gap:                 2,
+  },
   balanceLabel: {
     fontFamily:    FontFamily.sansSemiBold,
     fontSize:      10,
     color:         'rgba(250,249,247,0.5)',
     letterSpacing: 2.5,
-    marginTop:     10,
   },
   balanceValue: {
     fontFamily:  FontFamily.displayLight,
     fontSize:    36,
     letterSpacing: -1,
     fontVariant: ['tabular-nums'],
+    marginTop:   2,
   },
   balanceBreakdown: {
     fontFamily: FontFamily.sansRegular,
     fontSize:   FontSize.xs,
     color:      'rgba(250,249,247,0.5)',
-    marginTop:  2,
+    marginTop:  4,
   },
   actionRow: {
     flexDirection: 'row',
@@ -466,16 +490,27 @@ const styles = StyleSheet.create({
     paddingVertical:   4,
     paddingHorizontal: 10,
   },
-  entry: {
+  entryCard: {
+    borderRadius: 16,
+    borderWidth:  1,
+    overflow:     'hidden',
+  },
+  entryTop: {
     flexDirection: 'row',
     alignItems:    'center',
     gap:           12,
     padding:       14,
-    borderRadius:  16,
-    borderWidth:   1,
   },
   repaymentEntry: {
     backgroundColor: 'transparent',
+  },
+  noteBox: {
+    marginHorizontal: 14,
+    marginBottom:      14,
+    borderRadius:       12,
+    borderWidth:         1,
+    paddingVertical:     8,
+    paddingHorizontal:   12,
   },
   entryIcon: {
     width:          36,

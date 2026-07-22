@@ -3,14 +3,14 @@
  * "You recovered ₦120,000 in July."
  */
 import React, { useCallback, useMemo } from 'react';
-import { SectionList, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Archive, BadgeCheck } from 'lucide-react-native';
+import { ArrowLeft, Archive, BadgeCheck } from 'lucide-react-native';
 import { useTheme } from '../../theme';
 import { FontFamily, FontSize } from '../../theme/typography';
 import { Layout, Spacing } from '../../theme/spacing';
-import { InitialsAvatar } from '../../components/ui/InitialsAvatar';
+import { DirectionBadge } from '../../components/ui/DirectionBadge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useAuthStore } from '../../store/auth.store';
 import { useLedgerStore } from '../../store/ledger.store';
@@ -62,6 +62,14 @@ export default function HistoryScreen() {
     [persons],
   );
 
+  // History isn't a normal stacked route (it lives inside the tab group with
+  // no back-stack entry of its own), so router.back() can't be trusted —
+  // fall back to explicitly returning to Home when there's nothing to pop.
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as never);
+  }, [router]);
+
   // Group settled debts by settlement month, newest first
   const sections = useMemo<Section[]>(() => {
     const settled = debts
@@ -96,6 +104,15 @@ export default function HistoryScreen() {
         }}
         ListHeaderComponent={
           <View style={{ marginBottom: Spacing[4] }}>
+            <Pressable
+              hitSlop={12}
+              onPress={goBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              style={styles.backBtn}
+            >
+              <ArrowLeft size={22} color={colors.textSecondary as string} strokeWidth={2} />
+            </Pressable>
             <Text style={[text.bodySm, { color: colors.textTertiary }]}>Settled &amp; recovered</Text>
             <Text style={[styles.screenTitle, { color: colors.text }]}>History</Text>
           </View>
@@ -116,7 +133,7 @@ export default function HistoryScreen() {
             <View
               style={[styles.row, { backgroundColor: colors.card, borderColor: colors.borderLight }]}
             >
-              <InitialsAvatar name={personName(item.personId)} size={40} />
+              <DirectionBadge owedToMe={owed} size={40} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={[text.bodyMedium, { color: colors.text }]} numberOfLines={1}>
                   {personName(item.personId)}
@@ -153,6 +170,14 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  backBtn: {
+    width:          36,
+    height:         36,
+    alignItems:     'center',
+    justifyContent: 'center',
+    marginLeft:     -8,
+    marginBottom:   4,
+  },
   screenTitle: {
     fontFamily:    FontFamily.displayLight,
     fontSize:      FontSize['3xl'],

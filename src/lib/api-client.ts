@@ -18,8 +18,11 @@ const SESSION_KEY = 'ugwo_session';
 function getBaseUrl(): string {
   const url = process.env.EXPO_PUBLIC_API_URL;
   if (!url) {
-    // Fall back to localhost for local dev
-    return __DEV__ ? 'http://localhost:3000' : '';
+    // No EXPO_PUBLIC_API_URL set — fall back to the live production API so
+    // dev builds work out of the box without a local ugwo-api instance.
+    // (localhost:3001 only resolves correctly from an iOS simulator anyway —
+    // Android emulators need 10.0.2.2, so pointing at prod avoids that trap.)
+    return __DEV__ ? 'https://ugwo.nippysky.com' : '';
   }
   return url.replace(/\/$/, ''); // strip trailing slash
 }
@@ -155,12 +158,19 @@ export type UserProfile = {
 
 /**
  * Request a magic link email. Call this when the user taps "Continue" on the
- * email screen during onboarding.
+ * email screen during onboarding (intent: 'sign-up') or on the sign-in screen
+ * (intent: 'sign-in'). The server enforces the intent: sign-in rejects
+ * unknown emails (404), sign-up rejects emails that already have an account
+ * (409) — see getFriendlyErrorMessage / ApiError for surfacing these inline.
  */
-export async function requestMagicLink(email: string, name?: string): Promise<void> {
+export async function requestMagicLink(
+  email:  string,
+  name?:  string,
+  intent?: 'sign-in' | 'sign-up',
+): Promise<void> {
   await apiFetch('/api/auth/magic-link', {
     method:  'POST',
-    body:    { email, name },
+    body:    { email, name, intent },
     noAuth:  true,
   });
 }
@@ -257,48 +267,6 @@ export async function fetchDek(): Promise<string | null> {
  */
 export async function uploadDek(dekHex: string): Promise<void> {
   await apiFetch('/api/user/dek', { method: 'POST', body: { dek: dekHex } });
-}
-
-// ─── Notification endpoints ───────────────────────────────────────────────────
-
-/**
- * Register a device's Expo push token with the server.
- * Safe to call on every app launch — the server upserts.
- * Automatically includes the device's IANA timezone so the server can deliver
- * notifications at 7 pm the user's local time (Tier 3 smart timing).
- */
-export async function registerPushToken(
-  token: string,
-  platform: 'ios' | 'android',
-): Promise<void> {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-  await apiFetch('/api/notifications/token', {
-    method: 'POST',
-    body:   { token, platform, timezone },
-  });
-}
-
-/**
- * Deregister a push token on sign-out so the device stops receiving
- * push notifications while logged out.
- */
-export async function deregisterPushToken(token: string): Promise<void> {
-  try {
-    await apiFetch('/api/notifications/token', {
-      method: 'DELETE',
-      body:   { token },
-    });
-  } catch {
-    // Best-effort — token will be pruned by DeviceNotRegistered cleanup anyway
-  }
-}
-
-/**
- * Send a test push notification to all of the authenticated user's own devices.
- * Use this from DEV builds or admin tools to verify the push pipeline.
- */
-export async function sendTestPush(): Promise<{ sent: number }> {
-  return apiFetch<{ sent: number }>('/api/notifications/test', { method: 'POST' });
 }
 
 

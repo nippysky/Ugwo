@@ -178,8 +178,7 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
   },
   pager: {
-    flexGrow: 0,
-    flex:     1,
+    flex: 1,
   },
   slide: {
     paddingHorizontal: Layout.screenPadding + Spacing[2],

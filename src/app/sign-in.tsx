@@ -28,7 +28,7 @@ import { ChevronLeft, Mail } from 'lucide-react-native';
 import { Button, Input } from '../components/ui';
 import { useTheme } from '../theme';
 import { useAuthStore } from '../store/auth.store';
-import { verifyMagicOTP, getFriendlyErrorMessage } from '../lib/api-client';
+import { verifyMagicOTP, getFriendlyErrorMessage, ApiError } from '../lib/api-client';
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -52,6 +52,10 @@ export default function SignInScreen() {
   const [step, setStep]           = useState<'input' | 'sent'>('input');
   const [sentEmail, setSentEmail] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
+  // Inline, field-level error — set when the server tells us this email has
+  // no account (a distinct case from "invalid email format").
+  const [emailError, setEmailError]     = useState<string | null>(null);
+  const [emailNotFound, setEmailNotFound] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent]       = useState(false);
 
@@ -74,13 +78,20 @@ export default function SignInScreen() {
   const onSubmit = useCallback(async ({ email }: FormValues) => {
     const normalised = email.trim().toLowerCase();
     setSendError(null);
+    setEmailError(null);
+    setEmailNotFound(false);
     try {
-      await signIn(normalised);
+      await signIn(normalised, undefined, 'sign-in');
       setSentEmail(normalised);
       setOtp('');
       setOtpError(null);
       setStep('sent');
     } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setEmailError("We couldn't find an account with that email.");
+        setEmailNotFound(true);
+        return;
+      }
       setSendError(getFriendlyErrorMessage(err, 'Could not send the email. Please try again.'));
     }
   }, [signIn]);
@@ -92,7 +103,7 @@ export default function SignInScreen() {
     setOtpError(null);
     setOtp('');
     try {
-      await signIn(sentEmail);
+      await signIn(sentEmail, undefined, 'sign-in');
       setResent(true);
       setTimeout(() => setResent(false), 4000);
     } catch (err) {
@@ -330,7 +341,10 @@ export default function SignInScreen() {
                   label="Email address"
                   placeholder="you@example.com"
                   value={value}
-                  onChangeText={onChange}
+                  onChangeText={(v) => {
+                    onChange(v);
+                    if (emailNotFound) { setEmailError(null); setEmailNotFound(false); }
+                  }}
                   onBlur={onBlur}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -338,11 +352,23 @@ export default function SignInScreen() {
                   autoComplete="email"
                   textContentType="emailAddress"
                   returnKeyType="done"
-                  error={errors.email?.message}
+                  error={errors.email?.message ?? emailError ?? undefined}
                   onSubmitEditing={handleSubmit(onSubmit)}
                 />
               )}
             />
+            {emailNotFound && (
+              <Pressable
+                onPress={() => router.push('/(onboarding)/name' as never)}
+                style={styles.inlineActionLink}
+                accessibilityRole="button"
+              >
+                <Text style={[text.bodySm, { color: colors.textSecondary }]}>
+                  Not registered yet?{' '}
+                  <Text style={{ color: colors.primary }}>Sign up</Text>
+                </Text>
+              </Pressable>
+            )}
           </Animated.View>
         </View>
       </KeyboardAwareScrollView>
@@ -376,14 +402,14 @@ export default function SignInScreen() {
           By continuing, you agree to Ụgwọ's{' '}
           <Text
             style={{ color: colors.primary }}
-            onPress={() => Linking.openURL('https://aku.nippysky.com/terms').catch(() => {})}
+            onPress={() => Linking.openURL('https://ugwo.nippysky.com/terms').catch(() => {})}
           >
             Terms
           </Text>{' '}
           and{' '}
           <Text
             style={{ color: colors.primary }}
-            onPress={() => Linking.openURL('https://aku.nippysky.com/privacy').catch(() => {})}
+            onPress={() => Linking.openURL('https://ugwo.nippysky.com/privacy').catch(() => {})}
           >
             Privacy Policy
           </Text>
@@ -443,6 +469,10 @@ const styles = StyleSheet.create({
   },
   changeEmailLink: {
     paddingVertical: 4,
+  },
+  inlineActionLink: {
+    marginTop:       10,
+    paddingVertical: 2,
   },
   footer: {
     paddingTop: 8,

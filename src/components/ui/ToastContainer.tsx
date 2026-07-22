@@ -75,7 +75,7 @@ function getConfig(type: Toast['type'], colors: ReturnType<typeof useTheme>['col
 // ─── Single toast ─────────────────────────────────────────────────────────────
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
-  const { text, font, fontSize } = useTheme();
+  const { font, fontSize } = useTheme();
   const { colors }  = useTheme();
   const cfg         = getConfig(toast.type, colors);
   const IconComp    = cfg.icon;

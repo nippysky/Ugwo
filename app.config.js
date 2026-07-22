@@ -26,7 +26,6 @@ module.exports = {
       ITSAppUsesNonExemptEncryption: false,
       NSFaceIDUsageDescription:
         'Ụgwọ uses Face ID to keep your debt records private and unlock the app instantly.',
-      UIBackgroundModes: ['fetch', 'remote-notification'],
     },
   },
   android: {

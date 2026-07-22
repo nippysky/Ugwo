@@ -12,6 +12,8 @@
  *  debt_nudge      → /person/[id]      (open-ended 30-day nudge)
  *  debt_settled    → /(tabs)/history   (settled story)
  *  monthly_recap   → /(tabs)/history   (recovery recap)
+ *  log_nudge       → /(tabs) + auto-opens the "Owed to me / I owe" picker
+ *                    (the unprompted "did anything happen lately?" check-in)
  *
  * Cold-start taps wait for auth to initialise, then land after the tab
  * stack has mounted. Any resolution failure falls back to `/(tabs)`.
@@ -23,13 +25,13 @@ import { useAuthStore } from '../../store/auth.store';
 
 const HOME_HREF = '/(tabs)';
 
-// ─── Notification data payload (shared with server worker) ────────────────────
+// ─── Notification data payload — all locally scheduled by NotificationService ─
 
 export interface NotificationData {
-  type?:     string;   // 'bill_reminder' | 'goal_milestone' | 'hourly_reminder' | …
-  screen?:   string;   // legacy / override: 'bill' | 'goal' | 'home'
-  id?:       string;   // entity ID — bill/goal primary key
-  action?:   string;   // optional action hint ('log', 'review', 'pay')
+  type?:     string;   // 'debt_reminder' | 'debt_nudge' | 'debt_settled' | 'monthly_recap' | 'log_nudge'
+  screen?:   string;   // explicit target override: 'person' | 'history' | 'more' | 'home'
+  id?:       string;   // entity ID — the person id, when screen is 'person'
+  action?:   string;   // optional action hint, e.g. 'log' (auto-open the add-debt picker)
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -141,11 +143,32 @@ function navigate(
   if (resolved.type === 'tab') {
     // Navigate to a tab — safe to do immediately (tabs always exist)
     safePush(router, resolved.href);
+    if (data.action === 'log' || data.type === 'log_nudge') {
+      openAddDebtPicker(isColdStart);
+    }
     return;
   }
 
   // Navigate to a detail screen — needs the stack to be ready
   setTimeout(() => safePush(router, resolved.href), entityDelay);
+}
+
+/**
+ * Opens the "Owed to me / I owe" picker (the same one the center tab-bar FAB
+ * opens) after a log-nudge notification is tapped — the whole point of that
+ * nudge is to get straight to logging, not just land on Home and stop.
+ * Delayed so the (tabs)/_layout.tsx tree (which renders the picker) has time
+ * to mount, especially on a cold start where the navigator itself is still
+ * being constructed.
+ */
+function openAddDebtPicker(isColdStart: boolean): void {
+  const delay = isColdStart ? 700 : 250;
+  setTimeout(() => {
+    import('../../store/add-debt.store').then(({ useAddDebtStore }) => {
+      const { pickerOpen, openPicker } = useAddDebtStore.getState();
+      if (!pickerOpen) openPicker();
+    }).catch(() => {});
+  }, delay);
 }
 
 interface ResolvedRoute {
@@ -180,9 +203,6 @@ function resolveRoute(data: NotificationData): ResolvedRoute | null {
       case 'more':
         return { href: '/(tabs)/more', type: 'tab' };
 
-      case 'notifications':
-        return { href: '/notifications', type: 'detail' };
-
       case 'home':
         return { href: HOME_HREF, type: 'tab' };
 
@@ -203,6 +223,10 @@ function resolveRoute(data: NotificationData): ResolvedRoute | null {
     case 'debt_settled':
     case 'monthly_recap':
       return { href: '/(tabs)/history', type: 'tab' };
+
+    // Unprompted log nudge — land on Home; openAddDebtPicker() takes it from there
+    case 'log_nudge':
+      return { href: HOME_HREF, type: 'tab' };
   }
 
   // ── Default: home ────────────────────────────────────────────────────────

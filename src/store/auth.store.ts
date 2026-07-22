@@ -85,7 +85,7 @@ interface AuthState {
 
   // Actions — Auth
   initialize:         () => Promise<void>;
-  signIn:             (email: string, name?: string) => Promise<void>;
+  signIn:             (email: string, name?: string, intent?: 'sign-in' | 'sign-up') => Promise<void>;
   handleAuthCallback: (jwt: string, user: UserProfile) => Promise<void>;
   signOut:            () => Promise<void>;
   /**
@@ -245,10 +245,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   // ── Sign In: request a magic link email via the server ────────────────
-  signIn: async (email: string, name?: string) => {
+  signIn: async (email: string, name?: string, intent?: 'sign-in' | 'sign-up') => {
     set({ isLoading: true, error: null });
     try {
-      await requestMagicLink(email, name);
+      await requestMagicLink(email, name, intent);
       // The user checks their email and taps the magic link (or types the
       // OTP). The deep link opens the app and calls handleAuthCallback().
     } catch (err) {
@@ -324,17 +324,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   // ── Sign Out — full wipe so nav guard lands on onboarding ──────────────
   signOut: async () => {
     void revokeSession();
-
-    // Deregister push token so this device stops receiving pushes while
-    // signed out. Fire-and-forget.
-    void (async () => {
-      try {
-        const { notificationService } = require('../lib/notifications');
-        const { deregisterPushToken } = require('../lib/api-client');
-        const token = await notificationService.getExpoPushToken();
-        if (token) await deregisterPushToken(token);
-      } catch { /* non-critical */ }
-    })();
 
     // Cancel all locally scheduled reminders — they belong to this account
     void (async () => {
@@ -423,6 +412,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   // ── Refresh Profile from Server ────────────────────────────────────────
+  // Called when a WS "sync" nudge arrives from another device (e.g. the name
+  // was changed there). Must write through to SecureStore as well as SQLite —
+  // initialize() reads KEYS.USER from SecureStore on cold start, so skipping
+  // it here would mean a fully offline relaunch shows the stale cached name
+  // even though SQLite already has the fresh one.
   refreshProfile: async () => {
     const { user } = get();
     if (!user) return;
@@ -433,7 +427,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       await db.update(schema.users)
         .set({ name: profile.name, updatedAt: now })
         .where(eq(schema.users.id, user.id));
-      set({ user: { ...user, name: profile.name } });
+      const updated = { ...user, name: profile.name, updatedAt: now };
+      set({ user: updated });
+      await SecureStore.setItemAsync(KEYS.USER, JSON.stringify(updated));
     } catch { /* Non-fatal — profile refreshes on next app open */ }
   },
 

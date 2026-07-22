@@ -17,7 +17,7 @@ connections, end-to-end encrypted, local-first, reminder-driven.
 │   ├── store/           #   zustand stores (auth, ledger, sync, ui, notif)
 │   └── theme/           #   indigo/amber design tokens (Fraunces + Plus Jakarta Sans)
 ├── server/              # ugwo-api (Hono + Drizzle + Postgres + Redis + Resend)
-│   ├── src/             #   auth (magic link + OTP), sync, DEK escrow, push tokens, WS
+│   ├── src/             #   auth (magic link + OTP), sync, DEK escrow, WS
 │   ├── public/          #   marketing site ugwo.nippysky.com (+ privacy/terms/delete-account)
 │   ├── nginx-ugwo.conf  #   nginx site (API on :3001 + static site)
 │   ├── ecosystem.config.cjs

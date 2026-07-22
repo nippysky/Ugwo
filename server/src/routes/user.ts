@@ -170,7 +170,7 @@ router.post('/dek', async (c) => {
 
 // ─── DELETE /api/user/me ──────────────────────────────────────────────────────
 // Permanently deletes the user's account and ALL associated data.
-// PostgreSQL ON DELETE CASCADE handles: sessions, sync_records, push_tokens.
+// PostgreSQL ON DELETE CASCADE handles: sessions, sync_records.
 // magic_tokens is keyed by email (not userId), so it's deleted manually first.
 // Required for Play Store account-deletion compliance; the marketing site's
 // /delete-account page documents this flow for the store listing.

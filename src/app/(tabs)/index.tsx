@@ -131,6 +131,9 @@ export default function HomeScreen() {
                 styles.rowNet,
                 { color: positive ? colors.owedToMe : colors.iOwe },
               ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
             >
               {positive ? '+' : '−'}{fmt(Math.abs(item.net))}
             </Text>
@@ -184,7 +187,12 @@ export default function HomeScreen() {
             <Animated.View entering={FadeIn.duration(400)}>
               <View style={[styles.hero, { backgroundColor: Palette.indigo }]}>
                 <Text style={styles.heroLabel}>NET POSITION</Text>
-                <Text style={[styles.heroNet, { color: netColor }]}>
+                <Text
+                  style={[styles.heroNet, { color: netColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
                   {netSign}{fmt(Math.abs(totals.net))}
                 </Text>
                 <View style={[styles.heroRule, { backgroundColor: 'rgba(232,163,61,0.35)' }]} />
@@ -194,7 +202,12 @@ export default function HomeScreen() {
                       <ArrowDownLeft size={14} color={Palette.amber} />
                       <Text style={styles.heroSubLabel}>Owed to me</Text>
                     </View>
-                    <Text style={[styles.heroSubValue, { color: Palette.amber }]}>
+                    <Text
+                      style={[styles.heroSubValue, { color: Palette.amber }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
                       {fmt(totals.owedToMe)}
                     </Text>
                   </View>
@@ -204,7 +217,12 @@ export default function HomeScreen() {
                       <ArrowUpRight size={14} color="#F0A196" />
                       <Text style={styles.heroSubLabel}>I owe</Text>
                     </View>
-                    <Text style={[styles.heroSubValue, { color: '#F0A196' }]}>
+                    <Text
+                      style={[styles.heroSubValue, { color: '#F0A196' }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
                       {fmt(totals.iOwe)}
                     </Text>
                   </View>

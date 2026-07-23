@@ -12,6 +12,8 @@ import { useColorScheme } from 'react-native';
 import { initializeDatabase } from '../lib/database/client';
 import { useAuthStore } from '../store/auth.store';
 import { useUIStore } from '../store/ui.store';
+import { useAkuLinkStore } from '../store/aku-link.store';
+import { useLedgerStore } from '../store/ledger.store';
 import { ToastContainer } from '../components/ui/ToastContainer';
 import { AppLoader } from '../components/ui/AppLoader';
 import { LightColors, DarkColors } from '../theme/colors';
@@ -62,6 +64,8 @@ export default function RootLayout() {
       // is applied from the very first render after cold start.
       await loadSettings();
       await initialize();
+      // Restore any existing Connect-Akù link (independent of Ụgwọ's own auth).
+      useAkuLinkStore.getState().init().catch(() => {});
 
       // Request notification permissions, set up Android channels, and keep
       // the monthly recap pointed at the next month boundary. All idempotent.
@@ -118,6 +122,12 @@ export default function RootLayout() {
           import('../lib/sync/engine').then(({ pullAndMerge }) => {
             pullAndMerge(lastSyncAt).catch(() => {});
           });
+        }
+
+        // Retry any Akù mirror pushes that may have failed while backgrounded
+        // (e.g. no network at the time). Cheap no-op if nothing is pending.
+        if (user && !isLocked) {
+          useLedgerStore.getState().retryAkuSync().catch(() => {});
         }
       }
     });

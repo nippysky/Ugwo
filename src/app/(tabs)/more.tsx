@@ -1,5 +1,8 @@
 /**
- * More — profile, security, preferences, export, NIPPYSKY family, account.
+ * More — profile, security, preferences, support, NIPPYSKY family, account.
+ *
+ * Statement/PDF export intentionally lives only in Akù — Ụgwọ stays a plain,
+ * private ledger and doesn't produce exportable documents.
  */
 import React, { useState } from 'react';
 import {
@@ -14,18 +17,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { startOfMonth, endOfMonth, subMonths, format as formatDate } from 'date-fns';
 import {
   Banknote,
-  CalendarRange,
   ChevronRight,
+  CircleHelp,
   ExternalLink,
-  FileDown,
   Fingerprint,
   LogOut,
   Moon,
   ShieldCheck,
   Sparkles,
+  TriangleAlert,
   Trash2,
 } from 'lucide-react-native';
 import { useTheme } from '../../theme';
@@ -34,20 +36,15 @@ import { Layout, Spacing } from '../../theme/spacing';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { SheetModal } from '../../components/ui/SheetModal';
-import { UgwoDatePicker } from '../../components/ui/UgwoDatePicker';
 import { useAuthStore } from '../../store/auth.store';
-import { useLedgerStore } from '../../store/ledger.store';
 import { useUIStore } from '../../store/ui.store';
-import { useCurrencyFormat } from '../../hooks/useCurrencyFormat';
+import { useAkuLinkStore } from '../../store/aku-link.store';
 import { updateName } from '../../lib/api-client';
-import { exportStatementPdf, type StatementRange } from '../../lib/pdf-export';
-import { friendlyDate } from '../../lib/reminder-message';
-import { todayStr } from '../../lib/debt-math';
 
 const SITE = 'https://ugwo.nippysky.com';
 
 export default function MoreScreen() {
-  const { colors, text, isDark } = useTheme();
+  const { colors, text } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -59,21 +56,15 @@ export default function MoreScreen() {
   const deleteAccount    = useAuthStore((s) => s.deleteAccount);
   const updateUser       = useAuthStore((s) => s.updateUser);
 
-  const { persons, debts, repayments } = useLedgerStore();
   const { themeMode, setThemeMode, currency, showToast } = useUIStore();
-  const { symbol } = useCurrencyFormat();
+  const akuConnected        = useAkuLinkStore((s) => s.connected);
+  const akuName             = useAkuLinkStore((s) => s.akuName);
+  const akuCurrencyMismatch = useAkuLinkStore((s) => s.currencyMismatch);
 
   const [nameSheet, setNameSheet] = useState(false);
   const [nameDraft, setNameDraft] = useState(user?.name ?? '');
   const [savingName, setSavingName] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting]   = useState(false);
-
-  // Statement export — date-range picker
-  const [rangeSheet, setRangeSheet] = useState(false);
-  const [rangeFrom, setRangeFrom]   = useState<string | null>(null);
-  const [rangeTo, setRangeTo]       = useState<string | null>(null);
-  const [datePickerFor, setDatePickerFor] = useState<'from' | 'to' | null>(null);
 
   // ── Handlers ────────────────────────────────────────────────────────────
 
@@ -101,46 +92,6 @@ export default function MoreScreen() {
       showToast('error', 'Could not update your name.');
     } finally {
       setSavingName(false);
-    }
-  };
-
-  const handleExport = async (range?: StatementRange) => {
-    if (!user || exporting) return;
-    setExporting(true);
-    try {
-      await exportStatementPdf({
-        userName: user.name,
-        persons,
-        debts,
-        repayments,
-        symbol,
-        range,
-      });
-      setRangeSheet(false);
-    } catch {
-      showToast('error', 'Could not create the PDF.');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const openRangeSheet = () => {
-    setRangeFrom(null);
-    setRangeTo(null);
-    setRangeSheet(true);
-  };
-
-  const applyPreset = (preset: 'all' | 'thisMonth' | 'lastMonth') => {
-    if (preset === 'all') {
-      setRangeFrom(null);
-      setRangeTo(null);
-    } else if (preset === 'thisMonth') {
-      setRangeFrom(formatDate(startOfMonth(new Date()), 'yyyy-MM-dd'));
-      setRangeTo(todayStr());
-    } else {
-      const last = subMonths(new Date(), 1);
-      setRangeFrom(formatDate(startOfMonth(last), 'yyyy-MM-dd'));
-      setRangeTo(formatDate(endOfMonth(last), 'yyyy-MM-dd'));
     }
   };
 
@@ -284,9 +235,20 @@ export default function MoreScreen() {
           {renderRow({ icon: Moon, label: 'Appearance', value: themeMode === 'system' ? 'System' : themeMode === 'dark' ? 'Dark' : 'Light', onPress: cycleTheme })}
         </>)}
 
-        {/* Data */}
-        {renderSection('YOUR DATA', <>
-          {renderRow({ icon: FileDown, label: exporting ? 'Preparing statement…' : 'Export PDF statement', onPress: openRangeSheet })}
+        {/* Support */}
+        {renderSection('SUPPORT', <>
+          {renderRow({ icon: CircleHelp, label: 'FAQ', onPress: () => router.push('/faq' as never) })}
+        </>)}
+
+        {/* Connect Akù */}
+        {renderSection('AKÙ SYNC', <>
+          {renderRow({
+            icon: akuCurrencyMismatch ? TriangleAlert : Sparkles,
+            label: akuConnected ? `Connected · ${akuName}` : 'Connect Akù',
+            value: akuConnected && akuCurrencyMismatch ? 'Paused' : undefined,
+            danger: akuConnected && akuCurrencyMismatch,
+            onPress: () => router.push('/connect-aku' as never),
+          })}
         </>)}
 
         {/* NIPPYSKY family */}
@@ -327,87 +289,6 @@ export default function MoreScreen() {
           />
         </View>
       </SheetModal>
-
-      {/* Statement export — pick a date range */}
-      <SheetModal visible={rangeSheet} onClose={() => setRangeSheet(false)}>
-        <Text style={[text.screenTitle, { color: colors.text, marginBottom: 4 }]}>
-          Export statement
-        </Text>
-        <Text style={[text.bodySm, { color: colors.textSecondary, marginBottom: Spacing[4] }]}>
-          Choose which period the PDF should cover.
-        </Text>
-
-        <View style={styles.presetRow}>
-          {([
-            { key: 'all',       label: 'All time' },
-            { key: 'thisMonth', label: 'This month' },
-            { key: 'lastMonth', label: 'Last month' },
-          ] as const).map((p) => (
-            <Pressable
-              key={p.key}
-              onPress={() => applyPreset(p.key)}
-              style={[styles.presetChip, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-            >
-              <Text style={[text.bodySm, { color: colors.text }]}>{p.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={[styles.sectionLabel, text.label, { color: colors.textTertiary }]}>OR PICK A CUSTOM RANGE</Text>
-        <View style={styles.dateRow}>
-          <Pressable
-            style={[styles.dateBtn, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}
-            onPress={() => setDatePickerFor('from')}
-          >
-            <CalendarRange size={16} color={colors.textSecondary as string} />
-            <View>
-              <Text style={[text.caption, { color: colors.textTertiary }]}>From</Text>
-              <Text style={[text.bodySm, { color: rangeFrom ? colors.text : colors.textTertiary }]}>
-                {rangeFrom ? friendlyDate(rangeFrom) : 'Earliest'}
-              </Text>
-            </View>
-          </Pressable>
-          <Pressable
-            style={[styles.dateBtn, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}
-            onPress={() => setDatePickerFor('to')}
-          >
-            <CalendarRange size={16} color={colors.textSecondary as string} />
-            <View>
-              <Text style={[text.caption, { color: colors.textTertiary }]}>To</Text>
-              <Text style={[text.bodySm, { color: rangeTo ? colors.text : colors.textTertiary }]}>
-                {rangeTo ? friendlyDate(rangeTo) : 'Today'}
-              </Text>
-            </View>
-          </Pressable>
-        </View>
-
-        <View style={{ marginTop: Spacing[5] }}>
-          <Button
-            label={exporting ? 'Preparing…' : 'Export PDF'}
-            onPress={() => handleExport({ from: rangeFrom, to: rangeTo })}
-            loading={exporting}
-            disabled={exporting}
-            fullWidth
-          />
-        </View>
-      </SheetModal>
-
-      <UgwoDatePicker
-        isOpen={datePickerFor === 'from'}
-        value={rangeFrom ?? todayStr()}
-        maxDate={rangeTo ?? undefined}
-        onChange={(iso) => setRangeFrom(iso)}
-        onClose={() => setDatePickerFor(null)}
-        title="From which date?"
-      />
-      <UgwoDatePicker
-        isOpen={datePickerFor === 'to'}
-        value={rangeTo ?? todayStr()}
-        minDate={rangeFrom ?? undefined}
-        onChange={(iso) => setRangeTo(iso)}
-        onClose={() => setDatePickerFor(null)}
-        title="Through which date?"
-      />
     </View>
   );
 }
@@ -459,36 +340,5 @@ const styles = StyleSheet.create({
     fontSize:   FontSize.xs,
     lineHeight: FontSize.xs * 1.6,
     marginTop:  Spacing[2],
-  },
-
-  // Statement export sheet
-  presetRow: {
-    flexDirection: 'row',
-    flexWrap:      'wrap',
-    gap:           8,
-    marginBottom:  Spacing[5],
-  },
-  presetChip: {
-    paddingVertical:   9,
-    paddingHorizontal: 14,
-    borderRadius:      100,
-    borderWidth:       1,
-  },
-  sectionLabel: {
-    marginBottom: 8,
-  },
-  dateRow: {
-    flexDirection: 'row',
-    gap:           Spacing[3],
-  },
-  dateBtn: {
-    flex:              1,
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               10,
-    borderWidth:       1,
-    borderRadius:      14,
-    paddingVertical:   10,
-    paddingHorizontal: 14,
   },
 });

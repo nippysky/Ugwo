@@ -20,7 +20,17 @@ import { triggerPush, triggerDelete } from '../lib/sync/trigger';
 import { notificationService } from '../lib/notifications';
 import { withBalance, todayStr } from '../lib/debt-math';
 import { useUIStore } from './ui.store';
-import type { Debt, DebtDirection, Person, Repayment } from '../types';
+import {
+  pushDebtToAku,
+  updateAkuEntityForDebt,
+  deleteAkuEntityForDebt,
+  pushRepaymentToAku,
+  deleteAkuEntityForRepayment,
+  retryUnsyncedAkuMirrors,
+  backfillHistoryToAku,
+  type AkuBulkSyncResult,
+} from '../lib/aku-link/sync-to-aku';
+import type { AkuEntityType, Debt, DebtDirection, Person, Repayment } from '../types';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +84,15 @@ interface LedgerState {
     note:   string | null;
   }) => Promise<{ settled: boolean }>;
   deleteRepayment: (id: string) => Promise<void>;
+
+  // ── Connect-Akù bulk sync ──
+  /** Retry any debt/repayment that should already be Akù-synced but isn't
+   *  (e.g. logged while offline). Safe to call often — cheap no-op when
+   *  nothing is pending. */
+  retryAkuSync: () => Promise<void>;
+  /** One-time, explicit backfill of ALL existing history to Akù. Only ever
+   *  called when the user opts in from the Connect Akù screen. */
+  backfillAkuHistory: () => Promise<AkuBulkSyncResult>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -88,6 +107,65 @@ function rescheduleReminders(debt: Debt, persons: Person[]): void {
   const symbol = useUIStore.getState().currency.symbol;
   notificationService
     .scheduleDebtReminders(debt, person?.name ?? 'Someone', symbol)
+    .catch(() => {});
+}
+
+function personNameFor(personId: string, persons: Person[]): string {
+  return persons.find((p) => p.id === personId)?.name ?? 'Someone';
+}
+
+// ─── Connect-Akù mirroring (fire-and-forget, never blocks the ledger) ─────────
+// See src/lib/aku-link — when connected, new/edited/deleted debts and
+// repayments are mirrored to Akù as expense/income records. Every helper
+// below is best-effort: failures are swallowed so a flaky connection or a
+// currency mismatch never affects the primary Ụgwọ write that already
+// succeeded before these were called.
+
+async function persistDebtAkuLink(
+  debtId: string,
+  result: { akuEntityId: string; akuEntityType: AkuEntityType },
+): Promise<void> {
+  try {
+    const db = getDatabase();
+    await db.update(schema.debts)
+      .set({ akuEntityId: result.akuEntityId, akuEntityType: result.akuEntityType })
+      .where(eq(schema.debts.id, debtId));
+  } catch { /* non-fatal — next edit will retry the sync */ }
+  useLedgerStore.setState((s) => ({
+    debts: s.debts.map((d) => (d.id === debtId ? { ...d, ...result } : d)),
+  }));
+}
+
+async function persistRepaymentAkuLink(
+  repaymentId: string,
+  result: { akuEntityId: string; akuEntityType: AkuEntityType },
+): Promise<void> {
+  try {
+    const db = getDatabase();
+    await db.update(schema.repayments)
+      .set({ akuEntityId: result.akuEntityId, akuEntityType: result.akuEntityType })
+      .where(eq(schema.repayments.id, repaymentId));
+  } catch { /* non-fatal */ }
+  useLedgerStore.setState((s) => ({
+    repayments: s.repayments.map((r) => (r.id === repaymentId ? { ...r, ...result } : r)),
+  }));
+}
+
+function syncNewDebtToAku(debt: Debt, persons: Person[]): void {
+  pushDebtToAku(debt, personNameFor(debt.personId, persons))
+    .then((result) => { if (result) void persistDebtAkuLink(debt.id, result); })
+    .catch(() => {});
+}
+
+function syncDebtEditToAku(debt: Debt, persons: Person[]): void {
+  updateAkuEntityForDebt(debt, personNameFor(debt.personId, persons))
+    .then((result) => { if (result) void persistDebtAkuLink(debt.id, result); })
+    .catch(() => {});
+}
+
+function syncNewRepaymentToAku(repayment: Repayment, debt: Debt, persons: Person[]): void {
+  pushRepaymentToAku(repayment, debt, personNameFor(debt.personId, persons))
+    .then((result) => { if (result) void persistRepaymentAkuLink(repayment.id, result); })
     .catch(() => {});
 }
 
@@ -120,6 +198,10 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
         isLoaded:   true,
         error:      null,
       });
+      // Fire-and-forget: pick up anything that should already be Akù-synced
+      // but isn't yet (e.g. logged while offline). Cheap no-op if nothing
+      // is pending — never blocks or delays this load.
+      void get().retryAkuSync();
     } catch (err) {
       set({ isLoading: false, error: err instanceof Error ? err.message : 'Failed to load' });
     }
@@ -160,10 +242,12 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
       for (const rep of repayments.filter((r) => r.debtId === debt.id)) {
         await db.delete(schema.repayments).where(eq(schema.repayments.id, rep.id));
         triggerDelete('repayment', rep.id);
+        void deleteAkuEntityForRepayment(rep);
       }
       await db.delete(schema.debts).where(eq(schema.debts.id, debt.id));
       triggerDelete('debt', debt.id);
       notificationService.cancelDebtReminders(debt.id).catch(() => {});
+      void deleteAkuEntityForDebt(debt);
     }
     await db.delete(schema.persons).where(eq(schema.persons.id, id));
     triggerDelete('person', id);
@@ -191,6 +275,8 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
       note:       input.note,
       status:     'open',
       settledAt:  null,
+      akuEntityId:   null,
+      akuEntityType: null,
       createdAt:  now,
       updatedAt:  now,
     };
@@ -199,6 +285,7 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
     set((s) => ({ debts: [...s.debts, debt] }));
     triggerPush();
     rescheduleReminders(debt, get().persons);
+    syncNewDebtToAku(debt, get().persons);
     return debt;
   },
 
@@ -212,19 +299,28 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
     }));
     triggerPush();
     const debt = get().debts.find((d) => d.id === id);
-    if (debt) rescheduleReminders(debt, get().persons);
+    if (debt) {
+      rescheduleReminders(debt, get().persons);
+      // Only worth re-syncing if a field Akù actually cares about changed.
+      if ('principal' in patch || 'incurredOn' in patch || 'direction' in patch) {
+        syncDebtEditToAku(debt, get().persons);
+      }
+    }
   },
 
   deleteDebt: async (id) => {
-    const { repayments } = get();
+    const { repayments, debts } = get();
+    const debt = debts.find((d) => d.id === id);
     const db = getDatabase();
     for (const rep of repayments.filter((r) => r.debtId === id)) {
       await db.delete(schema.repayments).where(eq(schema.repayments.id, rep.id));
       triggerDelete('repayment', rep.id);
+      void deleteAkuEntityForRepayment(rep);
     }
     await db.delete(schema.debts).where(eq(schema.debts.id, id));
     triggerDelete('debt', id);
     notificationService.cancelDebtReminders(id).catch(() => {});
+    if (debt) void deleteAkuEntityForDebt(debt);
     set((s) => ({
       debts:      s.debts.filter((d) => d.id !== id),
       repayments: s.repayments.filter((r) => r.debtId !== id),
@@ -268,6 +364,8 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
       amount:    input.amount,
       paidOn:    input.paidOn,
       note:      input.note,
+      akuEntityId:   null,
+      akuEntityType: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -278,8 +376,10 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
     set({ repayments });
     triggerPush();
 
-    // Auto-settle at zero balance
     const debt = get().debts.find((d) => d.id === input.debtId);
+    if (debt) syncNewRepaymentToAku(repayment, debt, get().persons);
+
+    // Auto-settle at zero balance
     if (debt && debt.status === 'open') {
       const { outstanding } = withBalance(debt, repayments);
       if (outstanding <= 0) {
@@ -292,9 +392,33 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
 
   deleteRepayment: async (id) => {
     const db = getDatabase();
+    const repayment = get().repayments.find((r) => r.id === id);
     await db.delete(schema.repayments).where(eq(schema.repayments.id, id));
     triggerDelete('repayment', id);
+    if (repayment) void deleteAkuEntityForRepayment(repayment);
     set((s) => ({ repayments: s.repayments.filter((r) => r.id !== id) }));
+  },
+
+  // ── Connect-Akù bulk sync ────────────────────────────────────────────────
+  retryAkuSync: async () => {
+    try {
+      const { debts, repayments, persons } = get();
+      const result = await retryUnsyncedAkuMirrors(debts, repayments, persons);
+      for (const link of result.links) {
+        if (link.kind === 'debt') await persistDebtAkuLink(link.id, link);
+        else await persistRepaymentAkuLink(link.id, link);
+      }
+    } catch { /* best-effort — will retry again on next load/foreground */ }
+  },
+
+  backfillAkuHistory: async () => {
+    const { debts, repayments, persons } = get();
+    const result = await backfillHistoryToAku(debts, repayments, persons);
+    for (const link of result.links) {
+      if (link.kind === 'debt') await persistDebtAkuLink(link.id, link);
+      else await persistRepaymentAkuLink(link.id, link);
+    }
+    return result;
   },
 }));
 

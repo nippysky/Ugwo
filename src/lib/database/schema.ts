@@ -49,6 +49,12 @@ export const debts = sqliteTable('debts', {
   /** 'open' | 'settled' */
   status:     text('status').notNull().default('open'),
   settledAt:  text('settled_at'),
+  /** Set when this debt has been mirrored to a connected Akù account as an
+   *  expense/income record (see src/lib/aku-link). Null = not synced / not
+   *  connected. */
+  akuEntityId:   text('aku_entity_id'),
+  /** 'expense' | 'income' | null */
+  akuEntityType: text('aku_entity_type'),
   createdAt:  text('created_at').notNull(),
   updatedAt:  text('updated_at').notNull(),
 }, (t) => [
@@ -67,6 +73,9 @@ export const repayments = sqliteTable('repayments', {
   amount:    int('amount').notNull(),          // in kobo
   paidOn:    text('paid_on').notNull(),        // 'YYYY-MM-DD'
   note:      text('note'),
+  /** See debts.akuEntityId — same mirroring, for the repayment side. */
+  akuEntityId:   text('aku_entity_id'),
+  akuEntityType: text('aku_entity_type'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (t) => [

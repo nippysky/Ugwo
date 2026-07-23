@@ -121,6 +121,18 @@ export const useUIStore = create<UIState>()((set, get) => ({
     // Persist server-side so it survives logout / reinstall / new device —
     // fire-and-forget, retried implicitly next time the user changes it.
     updateCurrencyPreference(currency.code, currency.symbol).catch(() => {});
+
+    // If Connect Akù is on, re-check whether the two currencies still match.
+    // Lazy require avoids a circular import (aku-link.store reads currency
+    // from this store too).
+    try {
+      const { useAkuLinkStore } = require('./aku-link.store');
+      useAkuLinkStore.getState().refreshCurrencyMatch();
+      // A currency fix can unblock entries that were previously skipped —
+      // give the retry pass a chance to pick them up right away.
+      const { useLedgerStore } = require('./ledger.store');
+      useLedgerStore.getState().retryAkuSync().catch(() => {});
+    } catch { /* aku-link store not ready yet — fine, init() will settle it */ }
   },
 
   hydrateCurrencyFromServer: (code, symbol) => {

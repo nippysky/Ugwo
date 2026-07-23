@@ -63,6 +63,8 @@ const CREATE_TABLES_SQL = `
     note TEXT,
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','settled')),
     settled_at TEXT,
+    aku_entity_id TEXT,
+    aku_entity_type TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -74,6 +76,8 @@ const CREATE_TABLES_SQL = `
     amount INTEGER NOT NULL,
     paid_on TEXT NOT NULL,
     note TEXT,
+    aku_entity_id TEXT,
+    aku_entity_type TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -113,7 +117,15 @@ const CREATE_TABLES_SQL = `
 // Reserved for future schema evolution — same pattern as Akù: each ALTER is
 // attempted and "duplicate column" errors are swallowed on fresh installs.
 
-const MIGRATIONS_SQL: string[] = [];
+const MIGRATIONS_SQL: string[] = [
+  // Connect-Akù: mirror debts/repayments to a linked Akù account as
+  // expense/income records. These columns trace which Akù record (if any)
+  // corresponds to each local row, for later edits/deletes.
+  "ALTER TABLE debts ADD COLUMN aku_entity_id TEXT",
+  "ALTER TABLE debts ADD COLUMN aku_entity_type TEXT",
+  "ALTER TABLE repayments ADD COLUMN aku_entity_id TEXT",
+  "ALTER TABLE repayments ADD COLUMN aku_entity_type TEXT",
+];
 
 export async function initializeDatabase(): Promise<void> {
   const sqlite = getSQLiteDatabase();

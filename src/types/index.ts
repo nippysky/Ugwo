@@ -47,6 +47,9 @@ export type DebtStatus    = 'open' | 'settled';
 /** Derived UI status chip for a person / debt. */
 export type DueStatus = 'overdue' | 'due-soon' | 'open-ended' | 'upcoming' | 'settled';
 
+/** Which kind of Akù record this Ụgwọ entry mirrors, if Connect Akù is on. */
+export type AkuEntityType = 'expense' | 'income';
+
 export interface Debt {
   id:            UUID;
   userId:        UUID;
@@ -60,6 +63,9 @@ export interface Debt {
   note:          string | null;
   status:        DebtStatus;
   settledAt:     ISO8601 | null;
+  /** Akù mirror record, if Connect Akù is on and this debt synced successfully. */
+  akuEntityId:   UUID | null;
+  akuEntityType: AkuEntityType | null;
   createdAt:     ISO8601;
   updatedAt:     ISO8601;
 }
@@ -73,6 +79,8 @@ export interface Repayment {
   amount:    Minor;
   paidOn:    DateString;
   note:      string | null;
+  akuEntityId:   UUID | null;
+  akuEntityType: AkuEntityType | null;
   createdAt: ISO8601;
   updatedAt: ISO8601;
 }

@@ -82,7 +82,6 @@ module.exports = {
         },
       },
     ],
-    'expo-sharing',
   ],
   experiments: {
     typedRoutes: true,

@@ -58,6 +58,7 @@ module.exports = {
   },
   plugins: [
     'expo-router',
+    'expo-updates',
     'expo-local-authentication',
     'expo-secure-store',
     'expo-sqlite',

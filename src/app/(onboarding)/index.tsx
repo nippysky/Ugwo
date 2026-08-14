@@ -88,7 +88,15 @@ export default function WelcomeScreen() {
       <View
         style={[
           styles.container,
-          { paddingTop: insets.top + Spacing[6], paddingBottom: Math.max(insets.bottom, Spacing[6]) },
+          // Always add a fixed buffer ON TOP OF the device's reported safe-area
+          // inset, rather than just flooring it with Math.max(). Some Android
+          // devices (Samsung One UI gesture nav in particular) report a bottom
+          // inset that's visually too tight against the gesture pill/nav bar —
+          // Math.max(insets.bottom, 24) does nothing once the inset already
+          // clears 24, so the last CTA can end up sitting flush against the
+          // system bar. insets.bottom + extra guarantees real clearance no
+          // matter what the OS reports.
+          { paddingTop: insets.top + Spacing[6], paddingBottom: insets.bottom + Spacing[5] },
         ]}
       >
         {/* Wordmark */}
@@ -249,7 +257,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     alignItems:      'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   secondaryBtnText: {
     fontFamily: FontFamily.sansMedium,

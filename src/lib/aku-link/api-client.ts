@@ -107,7 +107,17 @@ async function akuFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export async function requestAkuMagicLink(email: string): Promise<void> {
-  await akuFetch('/api/auth/magic-link', { method: 'POST', body: { email }, noAuth: true });
+  // purpose: 'app_link' tells Akù's server this code is being requested by
+  // another app (Ụgwọ) on the user's behalf, not the Akù app itself. Akù
+  // then sends a code-only email with no clickable link — see the doc
+  // comment in Akù's server/src/routes/auth.ts for why that link is
+  // actively dangerous here (it both opens the wrong app AND invalidates
+  // the code, since they share one database row).
+  await akuFetch('/api/auth/magic-link', {
+    method: 'POST',
+    body:   { email, purpose: 'app_link' },
+    noAuth: true,
+  });
 }
 
 export interface AkuUserProfile {

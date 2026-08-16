@@ -102,6 +102,7 @@ export default function WelcomeScreen() {
         {/* Wordmark */}
         <Animated.View entering={FadeIn.duration(600)} style={styles.brandRow}>
           <Text style={styles.wordmark}>Ụgwọ</Text>
+          <Text style={styles.meaning}>IGBO FOR DEBT, OBLIGATION</Text>
           <Text style={styles.byline}>BY NIPPYSKY</Text>
         </Animated.View>
 
@@ -178,6 +179,13 @@ const styles = StyleSheet.create({
     fontSize:      FontSize['2xl'],
     color:         Palette.paper,
     letterSpacing: -0.5,
+  },
+  meaning: {
+    fontFamily:    FontFamily.sansSemiBold,
+    fontSize:      9,
+    color:         'rgba(232,163,61,0.6)',
+    letterSpacing: 2,
+    marginTop:     2,
   },
   byline: {
     fontFamily:    FontFamily.sansSemiBold,

@@ -15,6 +15,10 @@ import { FontFamily, FontSize } from '../theme/typography';
 
 const FAQS: { q: string; a: string }[] = [
   {
+    q: 'What does "Ụgwọ" mean?',
+    a: '"Ụgwọ" is Igbo for debt, or an obligation owed. It\'s also the name of NIPPYSKY\'s sister app, Akù — Igbo for wealth — which helps you track everyday income and spending. Ụgwọ handles the money that moves between people; Akù handles the money that\'s yours.',
+  },
+  {
     q: 'Is my data private? Can anyone else see my ledger?',
     a: 'Yes, completely. Every amount, name, and note is encrypted on your device before it ever reaches our server — we store only scrambled data we cannot read. Nobody else, including us, can see what you owe or who owes you.',
   },

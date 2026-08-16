@@ -46,6 +46,8 @@ export default function ConnectAkuScreen() {
   const [otp, setOtp]     = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError]     = useState<string | null>(null);
+  const [resending, setResending]   = useState(false);
+  const [resent, setResent]         = useState(false);
   // Opt-in, default OFF — see backfillHistoryToAku's doc comment for why this
   // must never run silently: anyone who already logged these same loans in
   // Akù by hand before connecting would end up double-counted.
@@ -66,6 +68,24 @@ export default function ConnectAkuScreen() {
       // error already surfaced via store's `error` field
     }
   }, [email, requestOtp, clearError]);
+
+  const handleResend = useCallback(async () => {
+    if (resending) return;
+    setResending(true);
+    setOtpError(null);
+    setOtp('');
+    clearError();
+    try {
+      await requestOtp(email);
+      setResent(true);
+      setTimeout(() => setResent(false), 4000);
+      setTimeout(() => otpRef.current?.focus(), 100);
+    } catch {
+      // error already surfaced via store's `error` field, rendered below
+    } finally {
+      setResending(false);
+    }
+  }, [resending, email, requestOtp, clearError]);
 
   const handleOtpChange = useCallback(async (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 6);
@@ -227,6 +247,22 @@ export default function ConnectAkuScreen() {
             ) : otpError ? (
               <Text style={[text.bodySm, { color: colors.danger, marginTop: spacing[2] }]}>{otpError}</Text>
             ) : null}
+          </View>
+
+          <View style={{ marginTop: spacing[6] }}>
+            {error ? (
+              <Text style={[text.bodySm, { color: colors.danger, textAlign: 'center', marginBottom: spacing[3] }]}>
+                {error}
+              </Text>
+            ) : null}
+            <Button
+              label={resending ? 'Sending…' : resent ? 'Code sent!' : "Didn't get it? Resend code"}
+              variant="secondary"
+              fullWidth
+              loading={resending}
+              disabled={resending || otpLoading}
+              onPress={handleResend}
+            />
           </View>
         </KeyboardAwareScrollView>
       </View>

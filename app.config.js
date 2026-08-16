@@ -30,6 +30,10 @@ module.exports = {
   },
   android: {
     package: 'com.nippysky.ugwo',
+    // versionCode is intentionally NOT set here — eas.json's
+    // "appVersionSource": "remote" + the production profile's
+    // "autoIncrement": true mean EAS tracks and bumps it automatically
+    // on every `eas build --profile production`. No manual edits needed.
     adaptiveIcon: {
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundImage: './assets/images/android-icon-background.png',

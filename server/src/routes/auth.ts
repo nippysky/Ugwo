@@ -94,6 +94,16 @@ router.post('/magic-link', async (c) => {
     return c.json({ error: 'Valid email is required' }, 400);
   }
 
+  // ── App-store review demo account ─────────────────────────────────────────
+  // The fixed demo credential (DEMO_EMAIL/DEMO_OTP, checked in
+  // /magic-link/verify-otp) never receives a real email and must work no
+  // matter which button a reviewer taps — exempt it from the sign-in/sign-up
+  // intent enforcement below, and skip sending mail entirely.
+  const demoEmailEnv = process.env.DEMO_EMAIL?.trim().toLowerCase();
+  if (demoEmailEnv && email === demoEmailEnv) {
+    return c.json({ success: true, message: 'Use the review code to sign in.' });
+  }
+
   let [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
   // ── Security hardening ──────────────────────────────────────────────────
@@ -252,13 +262,18 @@ router.post('/magic-link/verify-otp', async (c) => {
   const demoOtp   = process.env.DEMO_OTP?.trim();
   if (demoEmail && demoOtp && email === demoEmail && otp === demoOtp) {
     let [demoUser] = await db.select().from(users).where(eq(users.email, demoEmail)).limit(1);
+    // True only the very first time anyone signs into the demo account — the
+    // client uses this to seed sample data exactly once (see src/lib/demo-seed.ts).
+    // Every login after that is a normal "returning user" pull of the same
+    // already-seeded, already-encrypted records.
+    const isNewDemoUser = !demoUser;
     if (!demoUser) {
       const newId = generateId();
       await db.insert(users).values({ id: newId, name: 'Demo Reviewer', email: demoEmail });
       [demoUser] = await db.select().from(users).where(eq(users.id, newId)).limit(1);
     }
     const demoJwt = await createSession(demoUser!);
-    return c.json({ jwt: demoJwt, isNew: false, user: toPublicUser(demoUser!) });
+    return c.json({ jwt: demoJwt, isNew: isNewDemoUser, isDemo: true, user: toPublicUser(demoUser!) });
   }
 
   const [record] = await db

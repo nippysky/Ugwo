@@ -102,6 +102,17 @@ interface AkuLinkState {
   confirmOtp: (email: string, otp: string) => Promise<void>;
   /** Disconnect — wipes the Akù session/DEK from this device. Akù account itself is untouched. */
   disconnect: () => Promise<void>;
+  /**
+   * Wipe this device's local Akù session/DEK WITHOUT touching the
+   * account-level link on Ụgwọ's server (no `reportAkuLink(null)` call).
+   * Call this on Ụgwọ sign-out / account-deletion so stale SecureStore data
+   * from one Ụgwọ account can never leak into whichever account signs in on
+   * this device next. Unlike `disconnect()`, this must NOT unlink the
+   * account-wide connection — that connection may still be perfectly valid
+   * on other devices signed into the SAME Ụgwọ account (sign-out is not the
+   * same as disconnecting Akù).
+   */
+  clearLocalSession: () => Promise<void>;
   /** Re-check currency alignment against Ụgwọ's current currency. */
   refreshCurrencyMatch: () => void;
   clearError: () => void;
@@ -293,6 +304,33 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
     });
     // Clear account-wide too, so every other device stops showing "connected".
     void reportAkuLink(null);
+  },
+
+  clearLocalSession: async () => {
+    void clearAkuSession();
+    try {
+      await SecureStore.deleteItemAsync(PROFILE_KEY);
+      await SecureStore.deleteItemAsync(DEK_KEY);
+    } catch { /* ignore */ }
+    set({
+      connected:         false,
+      linkedElsewhere:   false,
+      serverAkuEmail:    null,
+      akuUserId:         null,
+      akuName:           null,
+      akuEmail:          null,
+      akuCurrencyCode:   null,
+      akuCurrencySymbol: null,
+      connectedAt:       null,
+      dek:               null,
+      currencyMismatch:  false,
+      error:             null,
+    });
+    // Deliberately NO reportAkuLink(null) here — this device's session is
+    // gone, but the account-level link may still be live on other devices
+    // signed into the SAME Ụgwọ account. Only user-initiated disconnect()
+    // (or account deletion, where the whole row is gone anyway) should ever
+    // clear the server-side link.
   },
 
   refreshCurrencyMatch: () => {

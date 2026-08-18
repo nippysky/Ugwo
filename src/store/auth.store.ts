@@ -350,6 +350,18 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       SecureStore.deleteItemAsync(KEYS.BIOMETRIC),
       SecureStore.deleteItemAsync(KEYS.ONBOARDED),
     ]);
+
+    // Wipe this device's local Akù session too — its SecureStore keys are
+    // NOT scoped per Ụgwọ user id, so leaving them behind would let whoever
+    // signs into a DIFFERENT account on this device inherit this account's
+    // Akù connection. Local-only wipe: does NOT unlink Akù account-wide (see
+    // clearLocalSession's doc comment) — other devices signed into THIS
+    // account keep their connection untouched.
+    try {
+      const { useAkuLinkStore } = require('./aku-link.store');
+      await useAkuLinkStore.getState().clearLocalSession();
+    } catch { /* non-critical */ }
+
     resetAllDataStores();
     set({
       user:         null,
@@ -399,6 +411,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       SecureStore.deleteItemAsync(KEYS.BIOMETRIC),
       SecureStore.deleteItemAsync(KEYS.ONBOARDED),
     ]);
+
+    // Wipe this device's local Akù session — otherwise a fresh account
+    // created afterward on this same device (even with the same email)
+    // would silently inherit the deleted account's Akù connection and DEK,
+    // since these SecureStore keys aren't scoped per Ụgwọ user id.
+    try {
+      const { useAkuLinkStore } = require('./aku-link.store');
+      await useAkuLinkStore.getState().clearLocalSession();
+    } catch { /* non-critical — server row is gone either way */ }
 
     // STEP 5: Reset data stores + auth state → nav guard routes to onboarding
     resetAllDataStores();

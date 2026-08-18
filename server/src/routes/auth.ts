@@ -49,6 +49,9 @@ type PublicUser = {
   email: string;
   preferredCurrencyCode:   string | null;
   preferredCurrencySymbol: string | null;
+  /** Account-level Connect-Akù link state — see schema.ts users table comment. */
+  akuLinkedEmail: string | null;
+  akuLinkedAt:    string | null;
 };
 
 function toPublicUser(user: typeof users.$inferSelect): PublicUser {
@@ -58,6 +61,8 @@ function toPublicUser(user: typeof users.$inferSelect): PublicUser {
     email: user.email,
     preferredCurrencyCode:   user.preferredCurrencyCode ?? null,
     preferredCurrencySymbol: user.preferredCurrencySymbol ?? null,
+    akuLinkedEmail: user.akuLinkedEmail ?? null,
+    akuLinkedAt:    user.akuLinkedAt ? user.akuLinkedAt.toISOString() : null,
   };
 }
 
@@ -139,6 +144,9 @@ router.post('/magic-link', async (c) => {
       encryptedDek: null,
       preferredCurrencyCode:   null,
       preferredCurrencySymbol: null,
+      akuLinkedEmail:          null,
+      akuLinkedAt:             null,
+      akuBackfillOfferedAt:    null,
       createdAt:    new Date(),
       updatedAt:    new Date(),
     };
@@ -327,6 +335,66 @@ router.get('/session', authMiddleware, async (c) => {
   if (!user) return c.json({ error: 'User not found' }, 404);
 
   return c.json({ user: toPublicUser(user), sessionId: payload.sessionId });
+});
+
+// ─── PATCH /api/auth/aku-link ─────────────────────────────────────────────────
+// Records (or clears) the account-level fact that this Ụgwọ account is linked
+// to an Akù account. NEVER carries the Akù JWT or DEK — those stay
+// device-local. Called from aku-link.store.ts right after a device finishes
+// its own local connect/disconnect, so every OTHER device signed into this
+// account can immediately see accurate link state on next launch instead of
+// each device tracking the connection independently (see schema.ts comment).
+//
+// First-write-wins on akuLinkedAt / akuBackfillOfferedAt: if this account is
+// already linked (e.g. device A connected, device B is now just restoring its
+// own local session), re-linking is a no-op on those two fields so the
+// original connection timestamp — and whether the one-time backfill prompt
+// was already shown — survive across every device.
+
+router.patch('/aku-link', authMiddleware, async (c) => {
+  const payload = c.get('jwtPayload');
+
+  let body: { akuEmail?: string | null };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const akuEmail = body.akuEmail?.trim().toLowerCase() || null;
+
+  const [user] = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
+  if (!user) return c.json({ error: 'User not found' }, 404);
+
+  if (!akuEmail) {
+    // Disconnect — clear account-wide so every device reflects it.
+    await db.update(users).set({
+      akuLinkedEmail:       null,
+      akuLinkedAt:          null,
+      akuBackfillOfferedAt: null,
+      updatedAt:            new Date(),
+    }).where(eq(users.id, user.id));
+    return c.json({ akuLinkedEmail: null, akuLinkedAt: null });
+  }
+
+  if (!user.akuLinkedAt) {
+    // First connection for this account — set the canonical timestamp once.
+    const now = new Date();
+    await db.update(users).set({
+      akuLinkedEmail:       akuEmail,
+      akuLinkedAt:          now,
+      akuBackfillOfferedAt: now,
+      updatedAt:            now,
+    }).where(eq(users.id, user.id));
+    return c.json({ akuLinkedEmail: akuEmail, akuLinkedAt: now.toISOString() });
+  }
+
+  // Already linked account-wide (a later device restoring its own local
+  // session) — leave the original timestamp/email untouched.
+  return c.json({
+    akuLinkedEmail: user.akuLinkedEmail,
+    akuLinkedAt:    user.akuLinkedAt.toISOString(),
+  });
 });
 
 // ─── DELETE /api/auth/session ─────────────────────────────────────────────────

@@ -33,6 +33,21 @@ export const users = pgTable('users', {
    */
   preferredCurrencyCode:   text('preferred_currency_code'),
   preferredCurrencySymbol: text('preferred_currency_symbol'),
+  /**
+   * Account-level Connect-Akù link state. The Akù session JWT and DEK are
+   * NEVER stored here (they stay device-local, in SecureStore, exactly like
+   * Ụgwọ's own DEK) — these three columns hold only the non-sensitive fact
+   * "this account is linked to Akù account X, since when," so every device
+   * signed into this Ụgwọ account can see the link immediately instead of
+   * each device tracking connection state independently. Without this, a
+   * second device has no way to know a connection already exists and shows
+   * a misleading "Connect Akù" first-run prompt. See aku-link.store.ts.
+   */
+  akuLinkedEmail:       text('aku_linked_email'),
+  akuLinkedAt:          timestamp('aku_linked_at'),
+  /** Set once, on the device that made the connection — prevents later
+   *  devices from re-showing the one-time "sync existing history?" prompt. */
+  akuBackfillOfferedAt: timestamp('aku_backfill_offered_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

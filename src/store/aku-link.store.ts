@@ -26,6 +26,7 @@ import {
   setAkuSession,
   type AkuUserProfile,
 } from '../lib/aku-link/api-client';
+import { reportAkuLink } from '../lib/api-client';
 import { decodeDEK } from '../lib/sync/crypto';
 import { useUIStore } from './ui.store';
 
@@ -49,6 +50,17 @@ interface StoredProfile {
 interface AkuLinkState {
   isLoaded:  boolean;
   connected: boolean;
+
+  /**
+   * True when Ụgwọ's OWN server says this account is linked to Akù, but this
+   * specific device has no local session/DEK yet (e.g. connected on Android,
+   * this is a fresh iOS install). The Connect-Akù screen uses this to show
+   * "already connected elsewhere — verify to enable syncing here" instead of
+   * a misleading first-time connect prompt.
+   */
+  linkedElsewhere: boolean;
+  /** The Akù email the server says this account is linked to, when linkedElsewhere. */
+  serverAkuEmail:  string | null;
 
   akuUserId:         string | null;
   akuName:           string | null;
@@ -75,6 +87,15 @@ interface AkuLinkState {
   // Actions
   /** Load any previously-connected state from SecureStore. Call at app init. */
   init: () => Promise<void>;
+  /**
+   * Reconcile with Ụgwọ's server-reported link state. Call from auth.store
+   * right after fetching the user profile (init + handleAuthCallback), same
+   * pattern as currency hydration. If the server says linked but this device
+   * has no local session, flips `linkedElsewhere`. If the server says NOT
+   * linked but this device still thinks it's connected (disconnected from
+   * another device), clears local state to match.
+   */
+  hydrateFromServer: (akuEmail: string | null) => void;
   /** Step 1 of connecting — send the OTP email via Akù's own API. */
   requestOtp: (email: string) => Promise<void>;
   /** Step 2 — verify the OTP, fetch the Akù DEK, and complete the connection. */
@@ -94,6 +115,9 @@ function currenciesMatch(ugwoCode: string, akuCode: string | null): boolean {
 export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
   isLoaded:  false,
   connected: false,
+
+  linkedElsewhere: false,
+  serverAkuEmail:  null,
 
   akuUserId:         null,
   akuName:           null,
@@ -141,6 +165,35 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
     } catch {
       set({ isLoaded: true });
     }
+  },
+
+  hydrateFromServer: (akuEmail: string | null) => {
+    const { connected } = get();
+
+    if (akuEmail && !connected) {
+      // Server says linked, this device has no local session — surface the
+      // "already connected elsewhere" state instead of a blank connect form.
+      set({ linkedElsewhere: true, serverAkuEmail: akuEmail });
+      return;
+    }
+
+    if (!akuEmail && connected) {
+      // Server says NOT linked but this device still thinks it's connected —
+      // it was disconnected from another device. Mirror that locally.
+      void clearAkuSession();
+      SecureStore.deleteItemAsync(PROFILE_KEY).catch(() => {});
+      SecureStore.deleteItemAsync(DEK_KEY).catch(() => {});
+      set({
+        connected: false, linkedElsewhere: false, serverAkuEmail: null,
+        akuUserId: null, akuName: null, akuEmail: null,
+        akuCurrencyCode: null, akuCurrencySymbol: null, connectedAt: null,
+        dek: null, currencyMismatch: false,
+      });
+      return;
+    }
+
+    // Either connected locally already, or genuinely never linked — nothing to reconcile.
+    set({ linkedElsewhere: false, serverAkuEmail: akuEmail ?? null });
   },
 
   requestOtp: async (email: string) => {
@@ -192,6 +245,8 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
 
       set({
         connected:         true,
+        linkedElsewhere:   false,
+        serverAkuEmail:    profile.akuEmail,
         akuUserId:         profile.akuUserId,
         akuName:           profile.akuName,
         akuEmail:          profile.akuEmail,
@@ -201,6 +256,12 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
         dek:               decodeDEK(dekHex),
         currencyMismatch:  !currenciesMatch(ugwoCode, profile.akuCurrencyCode),
       });
+
+      // Tell Ụgwọ's OWN server this account is linked, so every other device
+      // signed into it sees this immediately (first-write-wins server-side —
+      // safe to call even when this is actually just a reconnect on a device
+      // that was already account-linked elsewhere). Fire-and-forget.
+      void reportAkuLink(profile.akuEmail);
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Could not verify that code. Please try again.' });
       throw err;
@@ -218,6 +279,8 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
     } catch { /* ignore */ }
     set({
       connected:         false,
+      linkedElsewhere:   false,
+      serverAkuEmail:    null,
       akuUserId:         null,
       akuName:           null,
       akuEmail:          null,
@@ -228,6 +291,8 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
       currencyMismatch:  false,
       error:             null,
     });
+    // Clear account-wide too, so every other device stops showing "connected".
+    void reportAkuLink(null);
   },
 
   refreshCurrencyMatch: () => {

@@ -154,6 +154,14 @@ export type UserProfile = {
   preferredCurrencySymbol?: string | null;
   /** True only when the account was created in this magic-link request. */
   isNew?:     boolean;
+  /**
+   * Account-level Connect-Akù link state — set on ANY device that has
+   * connected, so every other device signed into this account can see it
+   * immediately instead of showing a misleading "Connect Akù" first-run
+   * prompt. null/null = not linked. See aku-link.store.ts.
+   */
+  akuLinkedEmail?: string | null;
+  akuLinkedAt?:    string | null;
 };
 
 /**
@@ -212,6 +220,23 @@ export async function revokeSession(): Promise<void> {
     await apiFetch('/api/auth/session', { method: 'DELETE' });
   } catch {
     // Best-effort — local state is cleared regardless
+  }
+}
+
+/**
+ * Record (or clear) the account-level Connect-Akù link fact on Ụgwọ's own
+ * server — never the Akù JWT or DEK, just the linked email + when. Call
+ * right after a local connect/disconnect succeeds so every other device
+ * signed into this account picks up the same state on next launch. The
+ * server is idempotent about the timestamp (first-write-wins), so calling
+ * this from a device that's just restoring an already-linked account is
+ * always safe. Best-effort — never throws.
+ */
+export async function reportAkuLink(akuEmail: string | null): Promise<void> {
+  try {
+    await apiFetch('/api/auth/aku-link', { method: 'PATCH', body: { akuEmail } });
+  } catch {
+    // Best-effort — local connect/disconnect already succeeded regardless
   }
 }
 

@@ -190,6 +190,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             profile.preferredCurrencySymbol,
           );
         }
+        // Reconcile Connect-Akù state across devices — see aku-link.store.ts.
+        const { useAkuLinkStore } = require('./aku-link.store');
+        useAkuLinkStore.getState().hydrateFromServer(profile.akuLinkedEmail ?? null);
+
         await SecureStore.setItemAsync(KEYS.USER, JSON.stringify(user));
       } catch {
         // Network unavailable — trust the local cache
@@ -319,6 +323,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const localCurrency = useUIStore.getState().currency;
       updateCurrencyPreference(localCurrency.code, localCurrency.symbol).catch(() => {});
     }
+
+    // ── Connect-Akù reconciliation ──────────────────────────────────────────
+    // A different device may already have connected Akù for this account —
+    // surface that here instead of showing a blank "Connect Akù" prompt.
+    const { useAkuLinkStore } = require('./aku-link.store');
+    useAkuLinkStore.getState().hydrateFromServer(profile.akuLinkedEmail ?? null);
   },
 
   // ── Sign Out — full wipe so nav guard lands on onboarding ──────────────

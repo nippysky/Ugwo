@@ -6,7 +6,7 @@
  * stays complete without double-entry. Entirely one-way (Ụgwọ → Akù), and
  * gated on both accounts using the same currency — see aku-link.store.ts.
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -36,7 +36,8 @@ export default function ConnectAkuScreen() {
   const { showToast, currency } = useUIStore();
 
   const {
-    connected, akuName, akuEmail, akuCurrencyCode, akuCurrencySymbol,
+    connected, linkedElsewhere, serverAkuEmail,
+    akuName, akuEmail, akuCurrencyCode, akuCurrencySymbol,
     currencyMismatch, isConnecting, error,
     requestOtp, confirmOtp, disconnect, clearError,
   } = useAkuLinkStore();
@@ -56,6 +57,15 @@ export default function ConnectAkuScreen() {
   const otpRef = useRef<TextInput>(null);
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  // Already connected on another device — pre-fill with the account's
+  // established Akù email so verifying here re-attaches the SAME connection
+  // rather than risking a second, different one. See aku-link.store.ts.
+  useEffect(() => {
+    if (linkedElsewhere && serverAkuEmail && !email) {
+      setEmail(serverAkuEmail);
+    }
+  }, [linkedElsewhere, serverAkuEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendCode = useCallback(async () => {
     clearError();
@@ -190,6 +200,68 @@ export default function ConnectAkuScreen() {
             <Text style={[text.bodyMedium, { color: colors.danger }]}>Disconnect Akù</Text>
           </Pressable>
         </View>
+      </View>
+    );
+  }
+
+  // ── Linked elsewhere state ────────────────────────────────────────────────
+  // This account already connected Akù from another device. No backfill
+  // toggle here — that's a one-time, account-level decision already made on
+  // the original device (see akuBackfillOfferedAt server-side).
+
+  if (linkedElsewhere && step === 'input') {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        <ScreenHeader
+          title="Connect Akù"
+          leftAction={{ icon: ArrowLeft, onPress: () => router.back(), accessibilityLabel: 'Back' }}
+          style={{ paddingTop: insets.top }}
+        />
+        <KeyboardAwareScrollView
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, gap: 4 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.introCard, { backgroundColor: colors.card, borderColor: colors.borderLight }]}>
+            <CheckCircle2 size={20} color={colors.primary as string} />
+            <Text style={[text.bodySm, { color: colors.textSecondary, marginTop: 8 }]}>
+              Already connected to Akù as{' '}
+              <Text style={{ color: colors.text, fontFamily: 'PlusJakartaSans_600SemiBold' }}>
+                {serverAkuEmail}
+              </Text>{' '}
+              from another device. Verify below to enable syncing here too.
+            </Text>
+          </View>
+
+          <View style={{ marginTop: 20 }}>
+            <Input
+              label="Akù email"
+              placeholder="you@example.com"
+              value={email}
+              editable={false}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            {error ? (
+              <Text style={[text.bodySm, { color: colors.danger, marginTop: 8 }]}>{error}</Text>
+            ) : null}
+          </View>
+
+          <View style={{ marginTop: 20 }}>
+            <Button
+              label="Send code"
+              variant="primary"
+              fullWidth
+              disabled={!emailValid || isConnecting}
+              loading={isConnecting}
+              onPress={handleSendCode}
+            />
+          </View>
+
+          <Text style={[text.caption, { color: colors.textTertiary, textAlign: 'center', marginTop: 16 }]}>
+            Wrong account? Disconnect from the device where you originally connected, then reconnect here.
+          </Text>
+        </KeyboardAwareScrollView>
       </View>
     );
   }

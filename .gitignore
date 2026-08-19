@@ -44,3 +44,6 @@ example
 
 # local env
 .env
+
+# Google Play service account key — credential, never commit
+google-play-service-account.json

@@ -63,9 +63,18 @@ export default function RootLayout() {
       // Load persisted theme + currency before auth so the correct theme
       // is applied from the very first render after cold start.
       await loadSettings();
+      // Restore any existing Connect-Akù link BEFORE auth's initialize() —
+      // initialize() calls aku-link's hydrateFromServer(), which reads
+      // aku-link's `connected` flag to decide whether this device already
+      // has a local session. If init() hasn't populated that flag from
+      // SecureStore yet, hydrateFromServer sees the store's default
+      // (`connected: false`) regardless of the real local state — on a
+      // device that WAS disconnected server-side, that skips the cleanup
+      // branch entirely, and init() then reloads the stale local session
+      // right after, resurrecting a connection the server says is gone.
+      // Must be awaited, in this order, every cold start.
+      await useAkuLinkStore.getState().init();
       await initialize();
-      // Restore any existing Connect-Akù link (independent of Ụgwọ's own auth).
-      useAkuLinkStore.getState().init().catch(() => {});
 
       // Request notification permissions, set up Android channels, and keep
       // the monthly recap pointed at the next month boundary. All idempotent.

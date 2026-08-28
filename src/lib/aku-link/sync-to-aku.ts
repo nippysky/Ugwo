@@ -15,7 +15,6 @@
  * fire these off after their own local write has already succeeded.
  */
 import { encryptRecord } from '../sync/crypto';
-import { generateUUID } from '../uuid';
 import { pushToAku } from './api-client';
 import { useAkuLinkStore } from '../../store/aku-link.store';
 import type { AkuEntityType, Debt, DebtDirection, Person, Repayment } from '../../types';
@@ -114,7 +113,18 @@ export async function pushDebtToAku(
   personName: string,
 ): Promise<AkuMirrorResult | null> {
   const entityType = entityTypeForDebt(debt.direction);
-  const akuEntityId = generateUUID();
+  // Deterministic, NOT a fresh generateUUID() — derived straight from the
+  // Ụgwọ debt's own stable id. This is what actually makes duplicate mirrors
+  // structurally impossible, not just unlikely: if two devices (or a retry
+  // pass racing a backfill, or a backfill racing itself after a stale local
+  // read) both decide to mirror the same debt, they compute the SAME
+  // akuEntityId and the SAME sync_records id (`${prefix}_${akuEntityId}`),
+  // so the second push is an idempotent upsert on Akù's server, not a new
+  // row. The old scheme (generateUUID() per push) only worked when every
+  // device's local `akuEntityId` tag was already in sync before deciding
+  // eligibility — which isn't guaranteed the moment a second device connects
+  // or runs backfill before its first full sync pull completes.
+  const akuEntityId = debt.id;
   const description = debt.direction === 'owed_to_me'
     ? `Loaned to ${personName}`
     : `Borrowed from ${personName}`;
@@ -174,7 +184,9 @@ export async function pushRepaymentToAku(
   personName: string,
 ): Promise<AkuMirrorResult | null> {
   const entityType = entityTypeForRepayment(debt.direction);
-  const akuEntityId = generateUUID();
+  // Deterministic — see pushDebtToAku's comment on why this must never be a
+  // fresh generateUUID() per push.
+  const akuEntityId = repayment.id;
   const description = debt.direction === 'owed_to_me'
     ? `Loan repaid by ${personName}`
     : `Repaid ${personName}`;

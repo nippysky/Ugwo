@@ -93,6 +93,14 @@ interface LedgerState {
   /** One-time, explicit backfill of ALL existing history to Akù. Only ever
    *  called when the user opts in from the Connect Akù screen. */
   backfillAkuHistory: () => Promise<AkuBulkSyncResult>;
+  /**
+   * Clear every local `akuEntityId`/`akuEntityType` tag for this user. Called
+   * by aku-link.store.ts when it detects a reconnect to a DIFFERENT Akù
+   * account — tags from the old account would otherwise block the new
+   * account from ever backfilling this history, since eligibility only
+   * checks "is this tagged?", not "tagged for which account?".
+   */
+  resetAkuMirrorTags: (userId: string) => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -419,6 +427,25 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
       else await persistRepaymentAkuLink(link.id, link);
     }
     return result;
+  },
+
+  resetAkuMirrorTags: async (userId: string) => {
+    try {
+      const db = getDatabase();
+      await db.update(schema.debts)
+        .set({ akuEntityId: null, akuEntityType: null })
+        .where(eq(schema.debts.userId, userId));
+      await db.update(schema.repayments)
+        .set({ akuEntityId: null, akuEntityType: null })
+        .where(eq(schema.repayments.userId, userId));
+    } catch {
+      // Best-effort — worst case some old tags linger, blocking backfill
+      // into the new account until the next successful pass.
+    }
+    useLedgerStore.setState((s) => ({
+      debts:      s.debts.map((d) => ({ ...d, akuEntityId: null, akuEntityType: null })),
+      repayments: s.repayments.map((r) => ({ ...r, akuEntityId: null, akuEntityType: null })),
+    }));
   },
 }));
 

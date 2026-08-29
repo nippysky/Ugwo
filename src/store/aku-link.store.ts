@@ -34,6 +34,15 @@ import { useUIStore } from './ui.store';
 
 const PROFILE_KEY = 'ugwo_aku_link_profile';
 const DEK_KEY      = 'ugwo_aku_link_dek';
+/**
+ * Durable marker of which Akù user id this device's locally-tagged
+ * `akuEntityId`s currently belong to. Deliberately NOT cleared by
+ * `disconnect()` — it must survive a disconnect so the NEXT connect (possibly
+ * to a different Akù account) can compare against it. Only cleared by
+ * `clearLocalSession()` (Ụgwọ sign-out / account deletion), where the local
+ * ledger itself is either gone or about to belong to a different Ụgwọ user.
+ */
+const MIRROR_OWNER_KEY = 'ugwo_aku_mirror_owner_id';
 
 interface StoredProfile {
   akuUserId:            string;
@@ -238,6 +247,31 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
         );
       }
 
+      // ── Detect a switch to a DIFFERENT Akù account ──────────────────────
+      // Every debt/repayment this device has ever mirrored carries a local
+      // `akuEntityId` tag, and the eligibility check for backfill/retry is
+      // just "is this tag null?" — it has no idea WHICH Akù account the tag
+      // points at. If the user disconnects and connects a different Akù
+      // account, those tags would still be non-null, silently blocking the
+      // new account from ever backfilling that history. Detect the switch
+      // here and untag everything so the new account starts clean.
+      // Reconnecting to the SAME account (the common case) is a no-op.
+      try {
+        const previousOwnerId = await SecureStore.getItemAsync(MIRROR_OWNER_KEY);
+        if (previousOwnerId && previousOwnerId !== user.id) {
+          const { useAuthStore } = require('./auth.store');
+          const { useLedgerStore } = require('./ledger.store');
+          const ugwoUserId = useAuthStore.getState().user?.id;
+          if (ugwoUserId) {
+            await useLedgerStore.getState().resetAkuMirrorTags(ugwoUserId);
+          }
+        }
+        await SecureStore.setItemAsync(MIRROR_OWNER_KEY, user.id);
+      } catch {
+        // Best-effort — worst case some old tags linger and the user needs
+        // to re-toggle backfill; never let this block the connection itself.
+      }
+
       const profile: StoredProfile = {
         akuUserId:         user.id,
         akuName:           user.name,
@@ -311,6 +345,10 @@ export const useAkuLinkStore = create<AkuLinkState>()((set, get) => ({
     try {
       await SecureStore.deleteItemAsync(PROFILE_KEY);
       await SecureStore.deleteItemAsync(DEK_KEY);
+      // This device's next sign-in may be a different Ụgwọ user entirely —
+      // don't let this account's mirror-owner marker leak into their first
+      // connect. See MIRROR_OWNER_KEY's doc comment.
+      await SecureStore.deleteItemAsync(MIRROR_OWNER_KEY);
     } catch { /* ignore */ }
     set({
       connected:         false,

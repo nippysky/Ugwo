@@ -13,6 +13,8 @@ import {
   Text,
   View,
 } from 'react-native';
+// NOTE: `ScrollView` above is still used for the horizontal person-suggestion
+// chip row — only the OUTER vertical scroller was removed (see below).
 import { CalendarDays, X } from 'lucide-react-native';
 import { SheetModal } from '../ui/SheetModal';
 import { Button } from '../ui/Button';
@@ -131,11 +133,16 @@ export function AddDebtSheet({ visible, direction, onClose, personId = null }: A
 
   return (
     <SheetModal visible={visible} onClose={close}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: spacing[6] }}
-      >
+      {/*
+        No nested vertical ScrollView here — SheetModal's own
+        BottomSheetScrollView is the ONE scroll container for this sheet.
+        Wrapping content in a second ScrollView (as this used to do) broke
+        gorhom's `keyboardBehavior="interactive"` handling: only the outer
+        BottomSheetScrollView participates in the sheet's keyboard-avoidance,
+        so inputs living inside a nested inner ScrollView never got scrolled
+        above the keyboard — the classic "keyboard covers the input" bug.
+      */}
+      <View style={{ paddingBottom: spacing[6] }}>
         {/* Title */}
         <Text style={[text.screenTitle, { color: colors.text, marginBottom: 4 }]}>
           {owedToMe ? 'Owed to me' : 'I owe'}
@@ -258,7 +265,7 @@ export function AddDebtSheet({ visible, direction, onClose, personId = null }: A
             fullWidth
           />
         </View>
-      </ScrollView>
+      </View>
 
       {/* Date pickers */}
       <UgwoDatePicker

@@ -7,7 +7,7 @@
  *     (a) taps link in email → auth-callback.tsx → lock screen
  *     (b) enters 6-digit code inline → verifyMagicOTP → handleAuthCallback → lock screen
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -29,6 +29,11 @@ import { Button, Input } from '../components/ui';
 import { useTheme } from '../theme';
 import { useAuthStore } from '../store/auth.store';
 import { verifyMagicOTP, getFriendlyErrorMessage, ApiError } from '../lib/api-client';
+
+// Cooldown between resend taps — long enough to discourage hammering the
+// button (and the email provider), short enough not to be annoying if the
+// email is slow to arrive.
+const RESEND_COOLDOWN_SECONDS = 30;
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -58,6 +63,7 @@ export default function SignInScreen() {
   const [emailNotFound, setEmailNotFound] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent]       = useState(false);
+  const [cooldown, setCooldown]   = useState(0);
 
   // OTP inline entry
   const [otp, setOtp]           = useState('');
@@ -75,6 +81,13 @@ export default function SignInScreen() {
     mode:          'onChange',
   });
 
+  // Tick the resend cooldown down once a second while it's running.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
   const onSubmit = useCallback(async ({ email }: FormValues) => {
     const normalised = email.trim().toLowerCase();
     setSendError(null);
@@ -86,6 +99,7 @@ export default function SignInScreen() {
       setOtp('');
       setOtpError(null);
       setStep('sent');
+      setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setEmailError("We couldn't find an account with that email.");
@@ -97,7 +111,7 @@ export default function SignInScreen() {
   }, [signIn]);
 
   const handleResend = useCallback(async () => {
-    if (resending) return;
+    if (resending || cooldown > 0) return;
     setResending(true);
     setSendError(null);
     setOtpError(null);
@@ -105,13 +119,14 @@ export default function SignInScreen() {
     try {
       await signIn(sentEmail, undefined, 'sign-in');
       setResent(true);
+      setCooldown(RESEND_COOLDOWN_SECONDS);
       setTimeout(() => setResent(false), 4000);
     } catch (err) {
       setSendError(getFriendlyErrorMessage(err, 'Could not resend. Please try again.'));
     } finally {
       setResending(false);
     }
-  }, [resending, sentEmail, signIn]);
+  }, [resending, cooldown, sentEmail, signIn]);
 
   const handleOtpChange = useCallback(async (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 6);
@@ -263,12 +278,17 @@ export default function SignInScreen() {
             </Text>
           ) : null}
           <Button
-            label={resending ? 'Sending…' : resent ? 'Email sent!' : 'Resend email'}
+            label={
+              resending ? 'Sending…'
+              : resent ? 'Email sent!'
+              : cooldown > 0 ? `Resend email (${cooldown}s)`
+              : 'Resend email'
+            }
             variant="secondary"
             size="lg"
             fullWidth
             loading={resending}
-            disabled={resending || otpLoading}
+            disabled={resending || otpLoading || cooldown > 0}
             onPress={handleResend}
           />
           <Pressable

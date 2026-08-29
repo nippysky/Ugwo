@@ -218,7 +218,11 @@ export default function PersonLedgerScreen() {
                 },
               ]}
             >
-              {fmt(settled ? d.principal : d.outstanding)}
+              {/* Settled debts show what was ACTUALLY repaid, not the original
+                  principal — identical for a plain settlement (repaid ===
+                  principal), but correctly reflects an interest-inclusive
+                  final payment instead of silently hiding it. */}
+              {fmt(settled ? d.repaid : d.outstanding)}
             </Text>
           </Pressable>
           {d.note ? (

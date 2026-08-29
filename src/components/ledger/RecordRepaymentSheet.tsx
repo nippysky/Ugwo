@@ -4,7 +4,7 @@
  * so the person screen can play the settlement celebration.
  */
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CalendarDays } from 'lucide-react-native';
 import { SheetModal } from '../ui/SheetModal';
 import { Button } from '../ui/Button';
@@ -53,7 +53,16 @@ export function RecordRepaymentSheet({ visible, debt, onClose, onSettled }: Reco
 
   if (!debt) return null;
 
-  const canSave = amount > 0 && amount <= debt.outstanding;
+  // Deliberately NOT capped at `debt.outstanding`. Ụgwọ has no separate
+  // interest field — `principal` is always the actual cash that changed
+  // hands (see types/index.ts). A loan repaid with interest legitimately
+  // comes back as MORE than the outstanding principal; blocking that would
+  // make it impossible to ever record such a repayment. `outstanding` is
+  // already floored at 0 (see withBalance in debt-math.ts), so an
+  // overpayment just settles cleanly — any amount above principal simply
+  // flows through as real cash, correctly mirrored to Akù as income when
+  // Connect Akù is on.
+  const canSave = amount > 0;
 
   const handleSave = async () => {
     if (!user || !canSave || saving) return;
@@ -80,11 +89,9 @@ export function RecordRepaymentSheet({ visible, debt, onClose, onSettled }: Reco
 
   return (
     <SheetModal visible={visible} onClose={close}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: spacing[6] }}
-      >
+      {/* No nested ScrollView — see AddDebtSheet's comment on why that broke
+          keyboard avoidance. SheetModal's BottomSheetScrollView already scrolls. */}
+      <View style={{ paddingBottom: spacing[6] }}>
         <Text style={[text.screenTitle, { color: colors.text, marginBottom: 4 }]}>
           Record repayment
         </Text>
@@ -99,8 +106,8 @@ export function RecordRepaymentSheet({ visible, debt, onClose, onSettled }: Reco
           asBottomSheetInput
         />
         {amount > debt.outstanding && (
-          <Text style={[text.caption, { color: colors.danger, marginTop: 4 }]}>
-            {"That's more than the outstanding balance."}
+          <Text style={[text.caption, { color: colors.accent, marginTop: 4 }]}>
+            {`That's ${fmt(amount - debt.outstanding)} more than the outstanding balance — the difference (e.g. interest) will settle the debt and count as extra income if Akù is connected.`}
           </Text>
         )}
 
@@ -147,7 +154,7 @@ export function RecordRepaymentSheet({ visible, debt, onClose, onSettled }: Reco
             fullWidth
           />
         </View>
-      </ScrollView>
+      </View>
 
       <UgwoDatePicker
         isOpen={pickerOpen}

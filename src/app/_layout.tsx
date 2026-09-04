@@ -125,6 +125,16 @@ export default function RootLayout() {
         notificationService.scheduleMonthlyRecap().catch(() => {});
         notificationService.scheduleLogNudges().catch(() => {});
 
+        // Recompute every open debt's reminder times against the phone's
+        // CURRENT timezone — self-corrects reminders scheduled before a trip
+        // (e.g. Lagos → Stockholm) so "9am" always means 9am wherever the
+        // user's clock currently says it is. See refreshAllReminders's doc
+        // comment in ledger.store.ts for why this can't be solved with a
+        // timezone-adaptive trigger type instead (Android has none).
+        if (user && !isLocked) {
+          useLedgerStore.getState().refreshAllReminders();
+        }
+
         // Pull delta from server — only fires when DEK is loaded (unlocked)
         const { dek, lastSyncAt } = useSyncStore.getState();
         if (dek && user && !isLocked) {

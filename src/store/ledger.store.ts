@@ -101,6 +101,23 @@ interface LedgerState {
    * checks "is this tagged?", not "tagged for which account?".
    */
   resetAkuMirrorTags: (userId: string) => Promise<void>;
+  /**
+   * Recompute every open debt's reminder times against the device's CURRENT
+   * local timezone. Call on every app foreground (see _layout.tsx).
+   *
+   * Reminders are scheduled as one-off `DATE`-type triggers — expo-notifications
+   * has no cross-platform "calendar day + local hour, timezone-adaptive" trigger
+   * (Android has no CALENDAR trigger at all; it only exists on iOS). A `DATE`
+   * trigger is a fixed instant: if a reminder is computed while in Lagos and the
+   * user then flies to Stockholm before it fires, the OS still fires at that
+   * exact instant — which now reads as the wrong LOCAL hour on the new
+   * timezone. Re-running the same schedule-at-9am math on every foreground
+   * (idempotent — cancels + reschedules) means the next time the app is
+   * opened in the new timezone, every still-pending reminder recomputes
+   * using the phone's current clock and self-corrects. This mirrors the
+   * pattern already used for scheduleMonthlyRecap/scheduleLogNudges.
+   */
+  refreshAllReminders: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -446,6 +463,14 @@ export const useLedgerStore = create<LedgerState>()((set, get) => ({
       debts:      s.debts.map((d) => ({ ...d, akuEntityId: null, akuEntityType: null })),
       repayments: s.repayments.map((r) => ({ ...r, akuEntityId: null, akuEntityType: null })),
     }));
+  },
+
+  refreshAllReminders: () => {
+    const { debts, persons } = get();
+    for (const debt of debts) {
+      if (debt.status !== 'open') continue;
+      rescheduleReminders(debt, persons);
+    }
   },
 }));
 
